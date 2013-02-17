@@ -44,3 +44,8 @@ pacalidx2g=45
 txgaintbl=1
 muxenab=0x10
 #triso2g=9
+
+#for BT-coexistence
+btc_params87=10000
+btc_params88=10000
+btc_params8=10000
