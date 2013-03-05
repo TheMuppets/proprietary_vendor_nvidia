@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ifeq ($(TARGET_ARCH),arm)
-ifeq (grouper,$(TARGET_DEVICE)))
+ifeq (grouper,$(TARGET_DEVICE))
 
 LOCAL_PATH := $(call my-dir)
 
