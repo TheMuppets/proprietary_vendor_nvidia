@@ -8,20 +8,25 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
-mtk=2
 
-if [ $(getprop ro.nct.gps_id) == $mtk ]; then
-        /system/bin/log -t "gps_select" -p i "MTK chip"
-        setprop ro.hardware.gps mtk
-        start mnld
+if [ $(getprop ro.boot.commchip_id) == 1 ]; then
+	/system/bin/log -t "gps_select" -p i "Commchip_id set to 1, Do not start BRCM GPS"
+	COUNT=0;
+	while [ $COUNT -le 10 ]; do
+		if [ $(getprop init.svc.gpsd) == "running" ] || [ $(getprop init.svc.gpsd) == "restarting" ]
+		then
+			stop gpsd
+			stop agps-daemon
+			/system/bin/log -t "gps_select" -p i "GPS disable"
+			break
+		fi
+		sleep 4
+		COUNT=$(($COUNT+1))
+	done
 else
-        echo 61 > /sys/class/gpio/export
-        echo 0 > /sys/class/gpio/gpio61/value
-        echo "out" > /sys/class/gpio/gpio61/direction
-        chown root:system /sys/class/gpio/gpio61/value
-        chmod 0664 /sys/class/gpio/gpio61/value
-        echo "enabled" > /sys/devices/platform/reg-userspace-consumer.2/state
-        /system/bin/log -t "gps_select" -p i "BRCM chip"
-        setprop ro.hardware.gps brcm
-        start gps-daemon
+	gpio=$(getprop ro.gps.gpio)
+	/system/bin/ln -s /sys/class/gpio/gpio$gpio/value /data/gps/gps_en
+	echo "enabled" > /sys/devices/platform/reg-userspace-consumer.2/state
+	/system/bin/log -t "gps_select" -p i "BRCM chip"
+	setprop ro.hardware.gps brcm
 fi

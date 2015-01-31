@@ -9,7 +9,7 @@
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 if [ $(getprop ro.boot.commchip_id) -gt 0 ]; then
-	echo "setting user configured value of WiFi chipset"
+	/system/bin/log -t "wifiloader" -p i "setting user configured value of WiFi chipset"
 	setprop wifi.commchip_id $(getprop ro.boot.commchip_id)
 	exit
 fi
@@ -18,6 +18,7 @@ BRCM=0x02d0
 TI=0x0097
 MRVL=0x02df
 brcm_symlink=y
+automotive_device=n
 
 # get wifi country code from factory partition
 wifi_country_code=
@@ -26,16 +27,20 @@ if [ -f /mnt/factory/wifi/country.txt ]; then
 fi
 /system/bin/log -t "wifiloader" -p i "Factory partition wifi country code: $wifi_country_code"
 
-#find hardware used and assigned corresponding mmc interface used for wifi chip
-mmc=$(ls /sys/bus/platform/devices/sdhci-tegra.0/mmc_host)
-if [ $(getprop ro.product.name) == "cardhu" ]; then
-	mmc=mmc1
-fi
-/system/bin/log -t "wifiloader" -p i "Using $mmc for WiFi"
-
 #Sometime WiFi card enumeration gets delayed in kernel. Retry 3 times for WiFi card enumeration from kernel.
-COUNT=1;
+COUNT=0;
 while [ $COUNT -le 3 ]; do
+	#find hardware used and assigned corresponding mmc interface used for wifi chip
+	sdmmc=$(getprop ro.wifi.sdmmc)
+	if [ -z $sdmmc ]; then
+		/system/bin/log -t "wifiloader" -p i "ro.wifi.sdmmc property not set, reading from sdmmc0"
+		mmc=$(ls /sys/bus/platform/devices/sdhci-tegra.0/mmc_host)
+	else
+		/system/bin/log -t "wifiloader" -p i "ro.wifi.sdmmc property set, reading from sdmmc$sdmmc"
+		mmc=$(ls /sys/bus/platform/devices/sdhci-tegra.$sdmmc/mmc_host)
+	fi
+	/system/bin/log -t "wifiloader" -p i "Using $mmc for WiFi"
+
 	vendor=$(cat /sys/bus/sdio/devices/$mmc:0001:1/vendor)
 	device=$(cat /sys/bus/sdio/devices/$mmc:0001:1/device)
 	if [ -z $vendor ]; then
@@ -54,13 +59,13 @@ fi
 vendor_device="$vendor"_"$device"
 vendor_device_country="$vendor"_"$device"_"$wifi_country_code"
 #Read vendor and product idea enumerated during kernel boot
-if [ -z "$(getprop persist.commchip_vendor)" ]; then
-	/system/bin/log -t "wifiloader" -p i "persist.commchip_vendor not defined. Reading enumerated data"
-	setprop persist.commchip_vendor $vendor
-	setprop persist.commchip_device $device
-	setprop persist.commchip_country "$wifi_country_code"
-elif [ $vendor_device_country = $(getprop persist.commchip_vendor)"_"$(getprop persist.commchip_device)"_"$(getprop persist.commchip_country) ]; then
-	/system/bin/log -t "wifiloader" -p i "persist.commchip_vendor defined by user. Using user-defined config"
+if [ -z "$(getprop persist.sys.commchip_vendor)" ]; then
+	/system/bin/log -t "wifiloader" -p i "persist.sys.commchip_vendor not defined. Reading enumerated data"
+	setprop persist.sys.commchip_vendor $vendor
+	setprop persist.sys.commchip_device $device
+	setprop persist.sys.commchip_country "$wifi_country_code"
+elif [ $vendor_device_country = $(getprop persist.sys.commchip_vendor)"_"$(getprop persist.sys.commchip_device)"_"$(getprop persist.sys.commchip_country) ]; then
+	/system/bin/log -t "wifiloader" -p i "persist.sys.commchip_vendor defined by user. Using user-defined config"
 	#check if symlinks are available; if available, do not create symlinks
 	#this check is needed when data partition is remounted after encryption
 	if [ -L /data/misc/wifi/firmware/fw_bcmdhd.bin ]; then
@@ -80,27 +85,29 @@ else
 		fi
 
 	fi
-	setprop persist.commchip_vendor $vendor
-	setprop persist.commchip_device $device
-	setprop persist.commchip_country "$wifi_country_code"
+	setprop persist.sys.commchip_vendor $vendor
+	setprop persist.sys.commchip_device $device
+	setprop persist.sys.commchip_country "$wifi_country_code"
 	/system/bin/rm /data/misc/wifi/wpa_supplicant.conf
 	/system/bin/rm /data/misc/wifi/p2p_supplicant.conf
 fi
 
-#Find device and set configurations
-#ti comm chip
-if [ $vendor = $TI ]; then
-	commchip_id=wl12xx
-	insmod /system/lib/modules/compat/compat.ko
-	insmod /system/lib/modules/compat/cfg80211.ko
-	insmod /system/lib/modules/compat/mac80211.ko
-	insmod /system/lib/modules/compat/wlcore.ko
-	insmod /system/lib/modules/compat/wl18xx.ko dc2dc=0 low_band_component=0x2 low_band_component_type=0x5 high_band_component=0x1 high_band_component_type=0x9 n_antennas_5=1 n_antennas_2=2
-	insmod /system/lib/modules/compat/wlcore_sdio.ko
-	start add_p2p_iface
+if [ $(getprop ro.hardware) == "p1859" ]; then
+	/system/bin/log -t "wifiloader" -p i "automotive device is detected"
+	if [ -e /system/lib/modules/vcm/cfg80211.ko ]; then
+		insmod /system/lib/modules/vcm/cfg80211.ko
+	fi
+	automotive_device=y
+else
+	/system/bin/log -t "wifiloader" -p i "mobile device is detected"
+	if [ -e /system/lib/modules/cfg80211.ko ]; then
+		insmod /system/lib/modules/cfg80211.ko
+	fi
+fi
 
+#Find device and set configurations
 #broadcomm comm chip
-elif [ $vendor = $BRCM ]; then
+if [ $vendor = $BRCM ]; then
 	if [ $device = "0x4329" ]; then
 		/system/bin/log -t "wifiloader" -p i  "BCM4329 chip identified"
 		chip="4329"
@@ -113,12 +120,47 @@ elif [ $vendor = $BRCM ]; then
 	elif [ $device = "0xa94d" ]; then
 		/system/bin/log -t "wifiloader" -p i  "BCM43341 chip identified"
 		chip="43341"
+	elif [ $device = "0x4324" ] && [ $automotive_device = y ]
+	then
+		/system/bin/log -t "wifiloader" -p i  "BCM43241-B4 chip identified"
+		chip="43241-b4"
 	elif [ $device = "0x4324" ]; then
 		/system/bin/log -t "wifiloader" -p i  "BCM43241 chip identified"
 		chip="43241"
 	elif [ $device = "0x4335" ]; then
                 /system/bin/log -t "wifiloader" -p i  "BCM4335 chip identified"
                 chip="4335"
+	elif [ $device = "0x4350" ]; then
+		/system/bin/log -t "wifiloader" -p i  "BCM4350 chip identified"
+		chip="4350"
+	elif [ $device = "0x4354" ]; then
+		/system/bin/log -t "wifiloader" -p i  "BCM4354 chip identified"
+		chip="4354"
+	fi
+
+	if [ ! -f /data/misc/wifi/wpa_supplicant.conf ] && [ -f /system/etc/firmware/brcm_wpa.conf ]
+	then
+		/system/bin/log -t "wifiloader" -p i  "BRCM: WLAN0 copy /system/etc/firmware/brcm_wpa.conf"
+		cp /system/etc/firmware/brcm_wpa.conf /data/misc/wifi/wpa_supplicant.conf
+		if [ $(getprop ro.build.version.sdk) -gt 19 ]; then
+			/system/bin/log -t "wifiloader" -p i  "BRCM: WLAN0 enable WOW triggers"
+			echo "wowlan_triggers=any" >> /data/misc/wifi/wpa_supplicant.conf
+		fi
+		chmod 0660 /data/misc/wifi/wpa_supplicant.conf
+		chown system:wifi /data/misc/wifi/wpa_supplicant.conf
+	elif [ -f /data/misc/wifi/wpa_supplicant.conf ]; then
+		wowlan_trigger_found=$(grep wowlan_triggers /data/misc/wifi/wpa_supplicant.conf)
+		if [ -z $wowlan_trigger_found ]; then
+			echo "wowlan_triggers=any" >> /data/misc/wifi/wpa_supplicant.conf
+		fi
+	fi
+
+	if [ ! -f /data/misc/wifi/p2p_supplicant.conf ] && [ -f /system/etc/firmware/brcm_p2p.conf ]
+	then
+		/system/bin/log -t "wifiloader" -p i  "BRCM: p2p copy /system/etc/firmware/brcm_p2p.conf"
+		cp /system/etc/firmware/brcm_p2p.conf /data/misc/wifi/p2p_supplicant.conf
+		chmod 0660 /data/misc/wifi/p2p_supplicant.conf
+		chown system:wifi /data/misc/wifi/p2p_supplicant.conf
 	fi
 
 	if [ $brcm_symlink = y ]; then
@@ -146,21 +188,25 @@ elif [ $vendor = $BRCM ]; then
 		/system/bin/ln -s /system/etc/nvram_$chip.txt /data/misc/wifi/firmware/nvram.txt
 		fi
 	fi
-	[ -f /system/lib/modules/cfg80211.ko ] && insmod /system/lib/modules/cfg80211.ko
-	if [ $chip = "4335" -o $chip = "4339"  ]; then
-		[ -f /system/lib/modules/bcmdhd.ko ] && insmod /system/lib/modules/bcmdhd.ko
-		setprop wifi.driver_param_path "/sys/module/bcmdhd/parameters/firmware_path"
-	elif [  $chip = "43341" ]; then
-                [ -f /system/lib/modules/bcm43341.ko ] && insmod /system/lib/modules/bcm43341.ko
-		setprop wifi.driver_param_path "/sys/module/bcm43341/parameters/firmware_path"
-	elif [  $chip = "43241" ]; then
-                [ -f /system/lib/modules/bcmdhd.ko ] && insmod /system/lib/modules/bcmdhd.ko
-		setprop wifi.driver_param_path "/sys/module/bcmdhd/parameters/firmware_path"
+	if [ $automotive_device = y ]; then
+		/system/bin/log -t "wifiloader" -p i "load bcmdhd module for automotive device"
+		if [ -e /system/lib/modules/vcm/bcmdhd.ko ]; then
+			insmod /system/lib/modules/vcm/bcmdhd.ko
+			/system/bin/ln -s /sys/module/bcmdhd/parameters/firmware_path /data/misc/wifi/firmware/firmware_path
+		else
+			/system/bin/log -t "wifiloader" -p i "KO not found, compiled part of kernel"
+			/system/bin/ln -s /sys/module/bcmdhd/parameters/firmware_path /data/misc/wifi/firmware/firmware_path
+		fi
 	else
-		[ -f /system/lib/modules/bcmdhd.ko ] && insmod /system/lib/modules/bcmdhd.ko
-		setprop wifi.driver_param_path "/sys/module/bcmdhd/parameters/firmware_path"
+		/system/bin/log -t "wifiloader" -p i "load bcmdhd module for mobile device"
+		if [ -e /system/lib/modules/bcmdhd.ko ]; then
+			insmod /system/lib/modules/bcmdhd.ko
+			/system/bin/ln -s /sys/module/bcmdhd/parameters/firmware_path /data/misc/wifi/firmware/firmware_path
+		else
+			/system/bin/log -t "wifiloader" -p i "KO not found, compiled part of kernel"
+			/system/bin/ln -s /sys/module/bcmdhd/parameters/firmware_path /data/misc/wifi/firmware/firmware_path
+		fi
 	fi
-	setprop wifi.supplicant wpa_suppl_nl
 #marvel comms chip
 elif [ $vendor_device = "$MRVL""_0x9129" ]; then
 	/system/bin/log -t "wifiloader" -p i  "MRVL8797 chip identified"
@@ -174,11 +220,14 @@ elif [ $vendor_device = "$MRVL""_0x9129" ]; then
 		chmod 0660 /data/misc/wifi/p2p_supplicant.conf
 		chown system:wifi /data/misc/wifi/p2p_supplicant.conf
 	fi
-	insmod /system/lib/modules/cfg80211.ko
-	insmod /system/lib/modules/sd8797mlan.ko
-	insmod /system/lib/modules/sd8797.ko drv_mode=5 cfg80211_wext=12 fw_name=sd8797_uapsta.bin max_vir_bss=1 sta_name=wlan wfd_name=p2p
-	insmod /system/lib/modules/mbt8797.ko fw_name=sd8897_uapsta.bin
-	setprop wifi.supplicant mvl_suppl_nl
+	if [ -e /system/lib/modules/sd8797mlan.ko ]; then
+		insmod /system/lib/modules/sd8797mlan.ko
+		insmod /system/lib/modules/sd8797.ko drv_mode=5 cfg80211_wext=12 fw_name=sd8797_uapsta.bin max_vir_bss=1 sta_name=wlan wfd_name=p2p
+		insmod /system/lib/modules/mbt8797.ko fw_name=sd8797_uapsta.bin
+		chown bluetooth net_bt_stack /dev/mbtchar0
+	else
+		/system/bin/log -t "wifiloader" -p i "KO not found, compiled part of kernel"
+	fi
 elif [ $vendor_device = "$MRVL""_0x912d" ]; then
 	/system/bin/log -t "wifiloader" -p i  "MRVL8897 chip identified"
 	if [ ! -f /data/misc/wifi/wpa_supplicant.conf ]; then
@@ -191,23 +240,16 @@ elif [ $vendor_device = "$MRVL""_0x912d" ]; then
 		chmod 0660 /data/misc/wifi/p2p_supplicant.conf
 		chown system:wifi /data/misc/wifi/p2p_supplicant.conf
 	fi
-	insmod /system/lib/modules/cfg80211.ko
-	insmod /system/lib/modules/sd8897mlan.ko
-	insmod /system/lib/modules/sd8897.ko drv_mode=5 cfg80211_wext=12 fw_name=sd8897_uapsta.bin max_vir_bss=1 sta_name=wlan wfd_name=p2p p2p_enh=1
-	insmod /system/lib/modules/mbt8897.ko fw_name=sd8897_uapsta.bin
-	setprop wifi.supplicant mvl_suppl_nl
-fi
-
-#FIX ME remove once kernel CL merges into main Bug 1231069
-for i in 0 1 2 3
-do
-	uartNode="/dev/ttyHS$i"
-	if [ -e "$uartNode" ]; then
-		/system/bin/ln -s /dev/ttyHS$i /dev/ttyTHS$i
+	if [ -e /system/lib/modules/sd8897mlan.ko ]; then
+		insmod /system/lib/modules/sd8897mlan.ko
+		insmod /system/lib/modules/sd8897.ko drv_mode=5 cfg80211_wext=12 fw_name=sd8897_uapsta.bin max_vir_bss=1 sta_name=wlan wfd_name=p2p p2p_enh=1
+		insmod /system/lib/modules/mbt8897.ko fw_name=sd8897_uapsta.bin
+		chown bluetooth net_bt_stack /dev/mbtchar0
+	else
+		/system/bin/log -t "wifiloader" -p i "KO not found, compiled part of kernel"
 	fi
-done
+fi
 
 #increase the wmem default and wmem max size
 echo 262144 > /proc/sys/net/core/wmem_default
 echo 262144 > /proc/sys/net/core/wmem_max
-
