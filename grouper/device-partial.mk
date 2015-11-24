@@ -69,7 +69,6 @@ PRODUCT_PACKAGES := \
     libnvwinsys \
     libnvwsi \
     libstagefrighthw \
-    libtf_crypto_sst \
-    tf_daemon
+    libtf_crypto_sst
 
 PRODUCT_PACKAGES += keystore.grouper
