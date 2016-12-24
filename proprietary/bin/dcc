@@ -1,0 +1,2 @@
+#!/system/bin/sh
+$* > /sys/kernel/dcc/dcc0

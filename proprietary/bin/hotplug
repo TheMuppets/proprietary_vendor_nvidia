@@ -1,0 +1,2 @@
+#!/system/bin/sh
+echo $2 > /sys/devices/system/cpu/cpu$1/online
