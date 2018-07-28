@@ -17,7 +17,8 @@ ifeq ($(NV_ANDROID_FRAMEWORK_ENHANCEMENTS),TRUE)
 # Apk
 PRODUCT_PACKAGES += \
                     NvCPLSvc \
-                    NvShieldTech
+                    NvShieldTech \
+                    TegraZone_Next
 
 # Libs
 PRODUCT_PACKAGES += \
@@ -26,8 +27,7 @@ PRODUCT_PACKAGES += \
     libhidraw \
     libnvcontrol_jni \
     libnvhwc_service \
-    libshieldtech \
-    nvshieldtech
+    libadaptordecoder
 
 ifeq ($(TARGET_ARCH),arm64)
 PRODUCT_PACKAGES += \
@@ -35,9 +35,7 @@ PRODUCT_PACKAGES += \
     liblota_32 \
     libhidraw_32 \
     libnvcontrol_jni_32 \
-    libnvhwc_service_32 \
-    libshieldtech_32 \
-    nvshieldtech_32
+    libnvhwc_service_32
 endif
 
 endif

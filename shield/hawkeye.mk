@@ -35,7 +35,7 @@ PRODUCT_PACKAGES += \
                     nvavp_os_f7e00000 \
                     nvavp_vid_ucode \
                     nvavp_vid_ucode_alt \
-                    tegra_xusb_firmware \
+                    tegra210b01_xusb_firmware \
                     tegra21x_xusb_firmware \
                     acr_ucode \
                     fecs \
@@ -53,7 +53,6 @@ PRODUCT_PACKAGES += \
                     nvhost_nvdec020_prod \
                     nvhost_nvdec_bl020 \
                     nvhost_nvdec_bl020_prod \
-                    nvhost_nvdec_bl_no_wpr020 \
                     nvhost_nvenc050 \
                     nvhost_nvjpg010 \
                     nvhost_tsec \

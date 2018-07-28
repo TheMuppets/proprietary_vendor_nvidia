@@ -13,16 +13,15 @@
 # limitations under the License.
 
 PRODUCT_PACKAGES += \
-    ussrd \
-    libaffinitydaemon \
-    libgov_boot \
-    libgov_camera \
-    libgov_force \
-    libgov_generic \
-    libgov_gpucompute \
-    libgov_graphics \
-    libgov_il \
-    libgov_spincircle \
-    libgov_tbc \
-    libgov_ui \
-    libussrd
+    nvphsd \
+    libnvgov_boot \
+    libnvgov_camera \
+    libnvgov_force \
+    libnvgov_generic \
+    libnvgov_gpucompute \
+    libnvgov_graphics \
+    libnvgov_il \
+    libnvgov_spincircle \
+    libnvgov_tbc \
+    libnvgov_ui \
+    libnvphsd

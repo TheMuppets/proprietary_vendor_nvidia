@@ -1,6 +1,0 @@
-All libs are from t210 except:
-
-media/lib/libnvomx*
-common/lib/libnvtvmr.so
-
-*wip* More to come

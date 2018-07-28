@@ -20,7 +20,7 @@ pdgain5g=4
 pdgain2g=4
 tworangetssi2g=0
 tworangetssi5g=0
-paprdis=1
+paprdis=0
 femctrl=10
 vendid=0x14e4
 devid=0x43a3
@@ -93,7 +93,7 @@ tempthresh=255
 tempoffset=255
 rawtempsense=0x1ff
 
-####&&&&&&-----> No BPF & L19 Removed- Pigtail- 29 APR Try set #3<---------&&&&&&&&&&&
+####&&> No BPF & L19 Removed- Pigtail- 29 APR , updated 1Dec2016 with "mcsbw405ghpo"<-&&&&
 pa2ga0=0XFF5A,0X16F0,0XFD39
 pa2ga1=0XFF5B,0X1792,0XFD30
 pa5ga0=0XFF4A,0X18D1,0XFD07,0XFF48,0X1824,0XFD14,0XFF3C,0X15B9,0XFD49,0XFF61,0X16E0,0XFD3E
@@ -106,6 +106,8 @@ pdoffset40ma0=0x0000
 pdoffset80ma0=0x0000
 pdoffset40ma1=0x0000
 pdoffset80ma1=0x0000
+
+#Max power below were set to match the power with power table in june.
 maxp2ga0=86
 maxp5ga0=86,86,86,86
 maxp2ga1=86
@@ -123,7 +125,9 @@ mcsbw205gmpo=0xd8866663
 mcsbw405gmpo=0x88666663
 mcsbw805gmpo=0xcc666665
 mcsbw205ghpo=0xdcb66663
-mcsbw405ghpo=0xaa666663
+
+#Backoff power increased from 0xaa666663 to 0xeea66663 (1Dec 2016)
+mcsbw405ghpo=0xeea66663
 mcsbw805ghpo=0xdd666665
 mcslr5glpo=0x0000
 mcslr5gmpo=0x0000

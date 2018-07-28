@@ -37,6 +37,8 @@ PRODUCT_PACKAGES += \
                     model_frontal \
                     nvram_43241 \
                     bcm43241 \
+                    nvram_4329 \
+                    bcm4329 \
                     fw_bcmdhd \
                     public.libraries \
                     nvavp_aacdec_ucode \
@@ -48,7 +50,6 @@ PRODUCT_PACKAGES += \
                     nvavp_os_f7e00000 \
                     nvavp_vid_ucode \
                     nvavp_vid_ucode_alt \
-                    tegra_xusb_firmware \
                     tegra12x_xusb_firmware \
                     fecs \
                     gpccs \
@@ -57,6 +58,9 @@ PRODUCT_PACKAGES += \
                     nvhost_msenc031 \
                     nvhost_tsec \
                     vic03_ucode
+
+# Camera workaround
+PRODUCT_PACKAGES += libscf
 
 # Raydium support
 PRODUCT_PACKAGES += para_10_02_00_a0 \

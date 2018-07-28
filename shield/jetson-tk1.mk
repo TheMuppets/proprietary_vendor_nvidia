@@ -39,7 +39,6 @@ PRODUCT_PACKAGES += \
                     nvavp_os_f7e00000 \
                     nvavp_vid_ucode \
                     nvavp_vid_ucode_alt \
-                    tegra_xusb_firmware \
                     tegra12x_xusb_firmware \
                     fecs \
                     gpccs \

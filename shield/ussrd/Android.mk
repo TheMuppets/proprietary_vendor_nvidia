@@ -27,8 +27,8 @@ include $(BUILD_PREBUILT)
 endif
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := ussrd
-LOCAL_SRC_FILES := bin64/ussrd
+LOCAL_MODULE := nvphsd
+LOCAL_SRC_FILES := bin64/nvphsd
 LOCAL_MODULE_CLASS := EXECUTABLES
 LOCAL_MODULE_TARGET_ARCH := arm64
 LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_EXECUTABLES)
@@ -37,8 +37,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libaffinitydaemon
-LOCAL_SRC_FILES := lib/libaffinitydaemon.so
+LOCAL_MODULE := libnvgov_boot
+LOCAL_SRC_FILES := lib/libnvgov_boot.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -48,8 +48,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_boot
-LOCAL_SRC_FILES := lib/libgov_boot.so
+LOCAL_MODULE := libnvgov_camera
+LOCAL_SRC_FILES := lib/libnvgov_camera.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -59,8 +59,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_camera
-LOCAL_SRC_FILES := lib/libgov_camera.so
+LOCAL_MODULE := libnvgov_force
+LOCAL_SRC_FILES := lib/libnvgov_force.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -70,8 +70,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_force
-LOCAL_SRC_FILES := lib/libgov_force.so
+LOCAL_MODULE := libnvgov_generic
+LOCAL_SRC_FILES := lib/libnvgov_generic.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -81,8 +81,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_generic
-LOCAL_SRC_FILES := lib/libgov_generic.so
+LOCAL_MODULE := libnvgov_gpucompute
+LOCAL_SRC_FILES := lib/libnvgov_gpucompute.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -92,8 +92,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_gpucompute
-LOCAL_SRC_FILES := lib/libgov_gpucompute.so
+LOCAL_MODULE := libnvgov_graphics
+LOCAL_SRC_FILES := lib/libnvgov_graphics.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -103,8 +103,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_graphics
-LOCAL_SRC_FILES := lib/libgov_graphics.so
+LOCAL_MODULE := libnvgov_il
+LOCAL_SRC_FILES := lib/libnvgov_il.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -114,8 +114,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_il
-LOCAL_SRC_FILES := lib/libgov_il.so
+LOCAL_MODULE := libnvgov_spincircle
+LOCAL_SRC_FILES := lib/libnvgov_spincircle.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -125,8 +125,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_spincircle
-LOCAL_SRC_FILES := lib/libgov_spincircle.so
+LOCAL_MODULE := libnvgov_tbc
+LOCAL_SRC_FILES := lib/libnvgov_tbc.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -136,8 +136,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_tbc
-LOCAL_SRC_FILES := lib/libgov_tbc.so
+LOCAL_MODULE := libnvgov_ui
+LOCAL_SRC_FILES := lib/libnvgov_ui.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -147,8 +147,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_ui
-LOCAL_SRC_FILES := lib/libgov_ui.so
+LOCAL_MODULE := libnvphsd
+LOCAL_SRC_FILES := lib/libnvphsd.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -158,19 +158,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libussrd
-LOCAL_SRC_FILES := lib/libussrd.so
-LOCAL_MODULE_SUFFIX := .so
-LOCAL_MODULE_CLASS := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH := arm
-LOCAL_MODULE_PATH := $($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_VENDOR_SHARED_LIBRARIES)
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_OWNER := nvidia
-include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := libaffinitydaemon
-LOCAL_SRC_FILES := lib64/libaffinitydaemon.so
+LOCAL_MODULE := libnvgov_boot
+LOCAL_SRC_FILES := lib64/libnvgov_boot.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -180,8 +169,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_boot
-LOCAL_SRC_FILES := lib64/libgov_boot.so
+LOCAL_MODULE := libnvgov_camera
+LOCAL_SRC_FILES := lib64/libnvgov_camera.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -191,8 +180,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_camera
-LOCAL_SRC_FILES := lib64/libgov_camera.so
+LOCAL_MODULE := libnvgov_force
+LOCAL_SRC_FILES := lib64/libnvgov_force.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -202,8 +191,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_force
-LOCAL_SRC_FILES := lib64/libgov_force.so
+LOCAL_MODULE := libnvgov_generic
+LOCAL_SRC_FILES := lib64/libnvgov_generic.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -213,8 +202,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_generic
-LOCAL_SRC_FILES := lib64/libgov_generic.so
+LOCAL_MODULE := libnvgov_gpucompute
+LOCAL_SRC_FILES := lib64/libnvgov_gpucompute.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -224,8 +213,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_gpucompute
-LOCAL_SRC_FILES := lib64/libgov_gpucompute.so
+LOCAL_MODULE := libnvgov_graphics
+LOCAL_SRC_FILES := lib64/libnvgov_graphics.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -235,8 +224,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_graphics
-LOCAL_SRC_FILES := lib64/libgov_graphics.so
+LOCAL_MODULE := libnvgov_il
+LOCAL_SRC_FILES := lib64/libnvgov_il.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -246,8 +235,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_il
-LOCAL_SRC_FILES := lib64/libgov_il.so
+LOCAL_MODULE := libnvgov_spincircle
+LOCAL_SRC_FILES := lib64/libnvgov_spincircle.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -257,8 +246,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_spincircle
-LOCAL_SRC_FILES := lib64/libgov_spincircle.so
+LOCAL_MODULE := libnvgov_tbc
+LOCAL_SRC_FILES := lib64/libnvgov_tbc.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -268,8 +257,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_tbc
-LOCAL_SRC_FILES := lib64/libgov_tbc.so
+LOCAL_MODULE := libnvgov_ui
+LOCAL_SRC_FILES := lib64/libnvgov_ui.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -279,19 +268,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libgov_ui
-LOCAL_SRC_FILES := lib64/libgov_ui.so
-LOCAL_MODULE_SUFFIX := .so
-LOCAL_MODULE_CLASS := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH := arm64
-LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_OWNER := nvidia
-include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := libussrd
-LOCAL_SRC_FILES := lib64/libussrd.so
+LOCAL_MODULE := libnvphsd
+LOCAL_SRC_FILES := lib64/libnvphsd.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64

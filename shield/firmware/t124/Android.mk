@@ -97,21 +97,11 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := tegra_xusb_firmware
-LOCAL_SRC_FILES := tegra_xusb_firmware
-LOCAL_MODULE_SUFFIX :=
-LOCAL_MODULE_CLASS := ETC
-LOCAL_MODULE_PATH := $(TARGET_OUT_ETC)/firmware
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_OWNER := nvidia
-include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
 LOCAL_MODULE := tegra12x_xusb_firmware
 LOCAL_SRC_FILES := tegra12x_xusb_firmware
 LOCAL_MODULE_SUFFIX :=
 LOCAL_MODULE_CLASS := ETC
-LOCAL_MODULE_PATH := $(TARGET_OUT_ETC)/firmware
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/firmware
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
@@ -171,7 +161,7 @@ LOCAL_MODULE := nvhost_tsec
 LOCAL_SRC_FILES := tegra12x/nvhost_tsec.fw
 LOCAL_MODULE_SUFFIX := .fw
 LOCAL_MODULE_CLASS := ETC
-LOCAL_MODULE_PATH := $(TARGET_OUT_ETC)/firmware/tegra12x
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/firmware/tegra12x
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)

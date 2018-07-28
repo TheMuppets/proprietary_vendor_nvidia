@@ -142,8 +142,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := sensors.default.api_v1.4.mpl530.nvs
-LOCAL_SRC_FILES := lib64/hw/sensors.default.api_v1.4.mpl530.nvs.so
+LOCAL_MODULE := sensors.t210ref.api_v1.4.mpl530.nvs
+LOCAL_SRC_FILES := lib64/hw/sensors.t210ref.api_v1.4.mpl530.nvs.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64

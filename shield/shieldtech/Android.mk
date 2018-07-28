@@ -57,6 +57,16 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := vendor.nvidia.hardware.shieldtech.inputflinger@1.0-service
+LOCAL_SRC_FILES := bin64/hw/vendor.nvidia.hardware.shieldtech.inputflinger@1.0-service
+LOCAL_MODULE_CLASS := EXECUTABLES
+LOCAL_MODULE_TARGET_ARCH := arm64
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_EXECUTABLES)/hw
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nvidia
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE := libfirmwareupdate
 LOCAL_SRC_FILES := lib/libfirmwareupdate.so
 LOCAL_MODULE_SUFFIX := .so
@@ -101,19 +111,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libshieldtech
-LOCAL_SRC_FILES := lib/libshieldtech.so
-LOCAL_MODULE_SUFFIX := .so
-LOCAL_MODULE_CLASS := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH := arm
-LOCAL_MODULE_PATH := $($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_VENDOR_SHARED_LIBRARIES)
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_OWNER := nvidia
-include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := nvshieldtech
-LOCAL_SRC_FILES := lib/nvshieldtech.so
+LOCAL_MODULE := vendor.nvidia.hardware.shieldtech.inputflinger@1.0
+LOCAL_SRC_FILES := lib/vendor.nvidia.hardware.shieldtech.inputflinger@1.0.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -167,8 +166,8 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libshieldtech
-LOCAL_SRC_FILES := lib64/libshieldtech.so
+LOCAL_MODULE := libnvwifi-service
+LOCAL_SRC_FILES := lib64/libnvwifi-service.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
@@ -178,12 +177,32 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := nvshieldtech
-LOCAL_SRC_FILES := lib64/nvshieldtech.so
+LOCAL_MODULE := vendor.nvidia.hardware.shieldtech.inputflinger@1.0
+LOCAL_SRC_FILES := lib64/vendor.nvidia.hardware.shieldtech.inputflinger@1.0.so
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm64
 LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nvidia
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := vendor.nvidia.hardware.shieldtech.input@1.0
+LOCAL_SRC_FILES := lib64/vendor.nvidia.hardware.shieldtech.input@1.0.so
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_MODULE_TARGET_ARCH := arm64
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nvidia
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := vendor.nvidia.hardware.shieldtech.inputflinger@1.0-service.rc
+LOCAL_SRC_FILES := etc/init/vendor.nvidia.hardware.shieldtech.inputflinger@1.0-service.rc
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_ETC)/init
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
