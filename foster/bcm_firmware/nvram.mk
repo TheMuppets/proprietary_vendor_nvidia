@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/t210/t210.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/foster/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+PRODUCT_PACKAGES += \
+                    nvram_darcy_a00 \
+                    nvram_foster_e_4354 \
+                    nvram_foster_e_antenna_tuned_4354 \
+                    nvram_loki_e_4354 \
+                    nvram_loki_e_antenna_tuned_4354 \
+                    nvram_jetsonE_cv_4354 \
+                    brcmfmac4356-pcie.txt

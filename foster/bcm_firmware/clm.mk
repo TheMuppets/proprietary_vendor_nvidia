@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/t210/t210.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/foster/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+PRODUCT_PACKAGES += \
+                    bcmdhd_clm_darcy \
+                    bcmdhd_clm_darcy_flynn-hp \
+                    bcmdhd_clm_foster \
+                    bcmdhd_clm_loki \
+                    bcmdhd_clm_sif \
+                    brcmfmac4356-pcie.clm_blob
