@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMON_PATH := vendor/nvidia/common
+LOCAL_PATH := vendor/nvidia/common/audio
 
 ifeq ($(TARGET_TEGRA_DOLBY),true)
-include $(COMMON_PATH)/ipprotect/BoardIPProtect.mk
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-include $(COMMON_PATH)/audio/BoardAudio.mk
+DEVICE_MANIFEST_FILE += $(LOCAL_PATH)/manifest.xml
+else
+DEVICE_MANIFEST_FILE += $(LOCAL_PATH)/manifest_nodolby.xml
 endif

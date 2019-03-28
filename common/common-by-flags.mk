@@ -17,3 +17,7 @@ LOCAL_PATH := vendor/nvidia/common
 ifeq ($(TARGET_TEGRA_DOLBY),true)
 $(call inherit-product, $(LOCAL_PATH)/ipprotect/ipprotect.mk)
 endif
+
+ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
+$(call inherit-product, $(LOCAL_PATH)/audio/audio.mk)
+endif

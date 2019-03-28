@@ -12,12 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMON_PATH := vendor/nvidia/common
+PRODUCT_PACKAGES += \
+    android.hardware.audio@2.0-service \
+    android.hardware.audio@4.0-impl \
+    android.hardware.audio.effect@4.0-impl \
+    audio.a2dp.default \
+    audio.usb.default \
+    audio.r_submix.default \
+    audio.primary.tegra \
+    android.hardware.soundtrigger@2.1-impl \
+    sound_trigger.primary.tegra \
+    NvAudioSvc
 
 ifeq ($(TARGET_TEGRA_DOLBY),true)
-include $(COMMON_PATH)/ipprotect/BoardIPProtect.mk
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-include $(COMMON_PATH)/audio/BoardAudio.mk
+PRODUCT_PACKAGES += \
+    android.hardware.audio@4.0-service-msd \
+    DolbyAudioService
 endif

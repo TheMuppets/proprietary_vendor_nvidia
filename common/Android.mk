@@ -12,12 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMON_PATH := vendor/nvidia/common
-
-ifeq ($(TARGET_TEGRA_DOLBY),true)
-include $(COMMON_PATH)/ipprotect/BoardIPProtect.mk
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-include $(COMMON_PATH)/audio/BoardAudio.mk
+ifneq ($(TARGET_TEGRA_VERSION),)
+LOCAL_PATH := $(call my-dir)
+include $(call all-makefiles-under,$(LOCAL_PATH))
 endif
