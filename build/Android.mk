@@ -13,6 +13,7 @@
 # limitations under the License.
 
 ifneq ($(TARGET_TEGRA_VERSION),)
-BUILD_NVIDIA_PREBUILT := vendor/nvidia/build/prebuilt.mk
+BUILD_NVIDIA_PREBUILT        := vendor/nvidia/build/prebuilt.mk
+BUILD_NVIDIA_COMMON_PREBUILT := vendor/nvidia/build/common_prebuilt.mk
+BUILD_NVIDIA_ARCH_PREBUILT   := vendor/nvidia/build/arch_prebuilt.mk
 endif
-
