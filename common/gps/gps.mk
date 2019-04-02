@@ -12,16 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMON_PATH := vendor/nvidia/common
-
-ifeq ($(TARGET_TEGRA_DOLBY),true)
-include $(COMMON_PATH)/ipprotect/BoardIPProtect.mk
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-include $(COMMON_PATH)/audio/BoardAudio.mk
-endif
-
-ifeq ($(TARGET_TEGRA_GPS),brcm)
-include $(COMMON_PATH)/gps/BoardGps.mk
-endif
+PRODUCT_PACKAGES += \
+    android.hardware.gnss@1.0-impl \
+    glgps_nvidiaTegra2android \
+    gps.brcm \
+    gps_select

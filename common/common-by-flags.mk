@@ -21,3 +21,7 @@ endif
 ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
 $(call inherit-product, $(LOCAL_PATH)/audio/audio.mk)
 endif
+
+ifeq ($(TARGET_TEGRA_GPS),brcm)
+$(call inherit-product, $(LOCAL_PATH)/gps/gps.mk)
+endif
