@@ -12,24 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LOCAL_PATH := vendor/nvidia/common
-
-ifeq ($(TARGET_TEGRA_DOLBY),true)
-$(call inherit-product, $(LOCAL_PATH)/ipprotect/ipprotect.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-$(call inherit-product, $(LOCAL_PATH)/audio/audio.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_GPS),brcm)
-$(call inherit-product, $(LOCAL_PATH)/gps/gps.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_CEC),nvhdmi)
-$(call inherit-product, $(LOCAL_PATH)/hdmi/hdmi.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore)
-$(call inherit-product, $(LOCAL_PATH)/keystore/keystore.mk)
-endif
+PRODUCT_PACKAGES += \
+    android.hardware.gatekeeper@1.0-impl \
+    android.hardware.gatekeeper@1.0-service \
+    android.hardware.keymaster@3.0-service.tegra \
+    gatekeeper.tlk.tegra \
+    gatekeeper.trusty.tegra \
+    keystore.v0.tegra
