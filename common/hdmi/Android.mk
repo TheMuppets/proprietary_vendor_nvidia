@@ -12,20 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMON_PATH := vendor/nvidia/common
+LOCAL_PATH := $(call my-dir)
 
-ifeq ($(TARGET_TEGRA_DOLBY),true)
-include $(COMMON_PATH)/ipprotect/BoardIPProtect.mk
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-include $(COMMON_PATH)/audio/BoardAudio.mk
-endif
-
-ifeq ($(TARGET_TEGRA_CEC),nvhdmi)
-include $(COMMON_PATH)/hdmi/BoardHdmi.mk
-endif
-
-ifeq ($(TARGET_TEGRA_GPS),brcm)
-include $(COMMON_PATH)/gps/BoardGps.mk
-endif
+include $(CLEAR_VARS)
+LOCAL_MODULE               := hdmi_cec.tegra
+LOCAL_SRC_FILES_32         := lib/hw/hdmi_cec.tegra.so
+LOCAL_SRC_FILES_64         := lib64/hw/hdmi_cec.tegra.so
+LOCAL_MULTILIB             := both
+LOCAL_MODULE_SUFFIX        := .so
+LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+LOCAL_VENDOR_MODULE        := true
+LOCAL_MODULE_RELATIVE_PATH := hw
+include $(BUILD_NVIDIA_COMMON_PREBUILT)
