@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+LOCAL_PATH := vendor/nvidia/t210
+
+$(call inherit-product, $(LOCAL_PATH)/t210-recovery.mk)
+
 # Audio firmware
 PRODUCT_PACKAGES += \
     adsp \
