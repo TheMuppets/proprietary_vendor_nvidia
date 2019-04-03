@@ -1,0 +1,9 @@
+service hwcomposer-2-0 /vendor/bin/hw/vendor.nvidia.hardware.graphics.composer@2.0-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+    interface vendor.nvidia.hardware.graphics.composer@2.0 default
+    interface vendor.nvidia.hardware.graphics.display@1.0 default
+    interface vendor.nvidia.hardware.graphics.mempool@1.0 default

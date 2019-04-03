@@ -30,6 +30,10 @@ ifeq ($(NV_ANDROID_FRAMEWORK_ENHANCEMENTS),true)
 $(call inherit-product, $(LOCAL_PATH)/nvcpl/nvcpl.mk)
 endif
 
+ifeq ($(TARGET_TEGRA_GPU),nvgpu)
+$(call inherit-product, $(LOCAL_PATH)/nvgpu/nvgpu.mk)
+endif
+
 ifeq ($(TARGET_TEGRA_CEC),nvhdmi)
 $(call inherit-product, $(LOCAL_PATH)/hdmi/hdmi.mk)
 endif
