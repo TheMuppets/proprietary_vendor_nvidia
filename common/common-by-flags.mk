@@ -50,6 +50,10 @@ ifeq ($(TARGET_TEGRA_OMX),nvmm)
 $(call inherit-product, $(LOCAL_PATH)/nvmm/nvmm.mk)
 endif
 
+ifeq ($(TARGET_TEGRA_PBC),pbc2)
+$(call inherit-product, $(LOCAL_PATH)/pbc/pbc2.mk)
+endif
+
 ifeq ($(TARGET_TEGRA_PHS),nvphs)
 $(call inherit-product, $(LOCAL_PATH)/nvphs/nvphs.mk)
 endif
