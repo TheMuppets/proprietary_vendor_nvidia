@@ -44,6 +44,7 @@ endif
 
 ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore)
 $(call inherit-product, $(LOCAL_PATH)/keystore/keystore.mk)
+$(call inherit-product, $(LOCAL_PATH)/security/security.mk)
 endif
 
 ifeq ($(TARGET_TEGRA_MEMTRACK),nvmemtrack)
