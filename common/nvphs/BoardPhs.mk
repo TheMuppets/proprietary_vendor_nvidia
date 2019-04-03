@@ -12,28 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMON_PATH := vendor/nvidia/common
+LOCAL_PATH := vendor/nvidia/common/nvphs
 
-ifeq ($(TARGET_TEGRA_DOLBY),true)
-include $(COMMON_PATH)/ipprotect/BoardIPProtect.mk
-endif
-
-ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
-include $(COMMON_PATH)/audio/BoardAudio.mk
-endif
-
-ifeq ($(TARGET_TEGRA_CEC),nvhdmi)
-include $(COMMON_PATH)/hdmi/BoardHdmi.mk
-endif
-
-ifeq ($(TARGET_TEGRA_GPS),brcm)
-include $(COMMON_PATH)/gps/BoardGps.mk
-endif
-
-ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore)
-include $(COMMON_PATH)/keystore/BoardKeystore.mk
-endif
-
-ifeq ($(TARGET_TEGRA_PHS),nvphs)
-include $(COMMON_PATH)/nvphs/BoardPhs.mk
-endif
+DEVICE_MANIFEST_FILE += $(LOCAL_PATH)/manifest.xml
