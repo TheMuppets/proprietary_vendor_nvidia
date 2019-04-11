@@ -83,7 +83,11 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvblit
+ifneq ($(filter t124,$(TARGET_TEGRA_VERSION)),)
+LOCAL_SRC_FILES := lib/libnvblit.$(TARGET_TEGRA_VERSION).so
+else
 LOCAL_SRC_FILES := lib/libnvblit.so
+endif
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -116,7 +120,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvddk_2d_v2
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libnvddk_2d_v2.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libnvddk_2d_v2.so
@@ -131,7 +135,11 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvddk_vic
+ifneq ($(filter t124,$(TARGET_TEGRA_VERSION)),)
+LOCAL_SRC_FILES := lib/libnvddk_vic.$(TARGET_TEGRA_VERSION).so
+else
 LOCAL_SRC_FILES := lib/libnvddk_vic.so
+endif
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -142,7 +150,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvrm
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libnvrm.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libnvrm.so
@@ -157,7 +165,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvrm_graphics
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libnvrm_graphics.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libnvrm_graphics.so
@@ -172,7 +180,11 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvrm_gpu
+ifneq ($(filter t124,$(TARGET_TEGRA_VERSION)),)
+LOCAL_SRC_FILES := lib/libnvrm_gpu.$(TARGET_TEGRA_VERSION).so
+else
 LOCAL_SRC_FILES := lib/libnvrm_gpu.so
+endif
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -183,7 +195,11 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvrmapi_tegra
+ifneq ($(filter t124,$(TARGET_TEGRA_VERSION)),)
+LOCAL_SRC_FILES := lib/libnvrmapi_tegra.$(TARGET_TEGRA_VERSION).so
+else
 LOCAL_SRC_FILES := lib/libnvrmapi_tegra.so
+endif
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -194,7 +210,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvglsi
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libnvglsi.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libnvglsi.so
@@ -209,7 +225,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvwsi
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libnvwsi.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libnvwsi.so
@@ -224,7 +240,11 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvgr
+ifneq ($(filter t124,$(TARGET_TEGRA_VERSION)),)
+LOCAL_SRC_FILES := lib/libnvgr.$(TARGET_TEGRA_VERSION).so
+else
 LOCAL_SRC_FILES := lib/libnvgr.so
+endif
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -257,7 +277,11 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libglcore
+ifeq ($(TARGET_TEGRA_VERSION),t124)
+LOCAL_SRC_FILES := lib/libglcore.$(TARGET_TEGRA_VERSION).so
+else
 LOCAL_SRC_FILES := lib/libglcore.so
+endif
 LOCAL_MODULE_SUFFIX := .so
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH := arm
@@ -268,7 +292,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libEGL_tegra
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/egl/libEGL_tegra.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/egl/libEGL_tegra.so
@@ -287,7 +311,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libGLESv1_CM_tegra
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/egl/libGLESv1_CM_tegra.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/egl/libGLESv1_CM_tegra.so
@@ -306,7 +330,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libGLESv2_tegra
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/egl/libGLESv2_tegra.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/egl/libGLESv2_tegra.so

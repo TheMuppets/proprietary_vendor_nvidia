@@ -20,7 +20,6 @@ PRODUCT_PACKAGES += \
                     camera.tegra \
                     libnvddk_2d_v2 \
                     libnvrm \
-                    libnvcolorutil \
                     libnvrm_graphics \
                     libnvddk_vic \
                     libnvgr \
@@ -29,16 +28,27 @@ PRODUCT_PACKAGES += \
                     libnvtvmr \
                     libnvcam_imageencoder \
                     libnvmm \
+                    libscf \
                     libnvcamlog \
-                    libnvcamerahdr_v3 \
+                    libnvcamerautils \
+                    libcuda \
+                    libnvrm_gpu \
+                    libnvisp_v3 \
+                    libnvmm_camera_v3 \
+                    libnvodm_imager \
+                    libnvvicsi_v3 \
                     libopencv24_tegra \
                     libtbb \
+                    libnvfnet \
+                    libnvfnetstorehdfx \
+                    libnvfnetstoredefog \
+                    libprotobuf-cpp-lold \
+                    libnvcamerahdr_v3 \
                     libnvcameranrr \
                     libnvcudautils \
-                    libnvcamerautils \
                     gralloc.tegra \
                     libnvblit \
-                    libnvrm_gpu \
+                    libnvcolorutil \
                     hdmi_cec.tegra \
                     hwcomposer.tegra \
                     libnvhwc_service \
@@ -47,19 +57,6 @@ PRODUCT_PACKAGES += \
                     keystore.tegra \
                     memtrack.tegra \
                     vulkan.tegra \
-                    libnvscf \
-                    libnvisp_v3 \
-                    libnvisp \
-                    libnvmm_camera_v3 \
-                    libnvodm_imager \
-                    libnvcamv4l2 \
-                    libnvvicsi_v3 \
-                    libcuda \
-                    libnvphs \
-                    libnvidia-fatbinaryloader \
-                    libnvfnet \
-                    libnvfnetstorehdfx \
-                    libnvfnetstoredefog \
                     sensors.default.api_v1.3.mpl520.nvs \
                     libsensors.hal.nvs \
                     libsensors.hal-drivers.nvs \
@@ -72,19 +69,21 @@ PRODUCT_PACKAGES += \
                     downloader \
                     tlk_daemon \
                     ss_status \
+                    libtsec_wrapper \
                     rm_ts_server \
                     librm_ts_service \
                     ts.default \
                     librm31080 \
                     touch_para_10 \
+                    libnvcamv4l2 \
                     libEGL_tegra \
                     libnvglsi \
                     libnvrmapi_tegra \
                     libnvcpl \
+                    libnvphs \
                     libGLESv1_CM_tegra \
                     libglcore \
-                    libnvdc \
-                    libnvimp \
+                    libw \
                     libGLESv2_tegra \
                     libnvRSDriver \
                     libnvRSCompiler \

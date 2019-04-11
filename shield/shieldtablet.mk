@@ -29,17 +29,15 @@ PRODUCT_PACKAGES += run_ss_status.sh \
                     hdcp2x \
                     hdcp2xtest
 
-# Bootloader update
-PRODUCT_PACKAGES += blob
-
 # Firmware
 PRODUCT_PACKAGES += \
                     model_frontal \
                     nvram_43241 \
                     bcm43241 \
-                    nvram_4329 \
-                    bcm4329 \
+                    nvram_43341 \
+                    bcm43341 \
                     fw_bcmdhd \
+                    fw_bcmdhd-43341 \
                     public.libraries \
                     nvavp_aacdec_ucode \
                     nvavp_aud_ucode \
@@ -60,7 +58,7 @@ PRODUCT_PACKAGES += \
                     vic03_ucode
 
 # Camera workaround
-PRODUCT_PACKAGES += libscf
+PRODUCT_PACKAGES += libphs
 
 # Raydium support
 PRODUCT_PACKAGES += para_10_02_00_a0 \

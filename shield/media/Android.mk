@@ -16,7 +16,7 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libnvodm_imager
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libnvodm_imager.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libnvodm_imager.so

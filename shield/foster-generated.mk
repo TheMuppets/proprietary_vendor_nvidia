@@ -38,20 +38,19 @@ PRODUCT_PACKAGES += \
                     libnvcamv4l2_32 \
                     libnvisp_v3_32 \
                     libnvvicsi_v3_32 \
-                    libcuda_32 \
-                    libnvphs_32 \
-                    libnvrm_gpu_32 \
-                    libnvidia-fatbinaryloader_32 \
+                    libnvcspline_32 \
                     libopencv24_tegra_32 \
                     libtbb_32 \
                     libnvscf_32 \
                     libnvisp_32 \
+                    libnvphs_32 \
                     libnvfnet_32 \
                     libnvfnetstorehdfx_32 \
                     libnvfnetstoredefog_32 \
                     gatekeeper.tlk.tegra_32 \
                     gralloc.tegra_32 \
                     libnvblit_32 \
+                    libnvrm_gpu_32 \
                     hdmi_cec.tegra_32 \
                     hwcomposer.tegra_32 \
                     libnvhwc_service_32 \
@@ -102,6 +101,8 @@ PRODUCT_PACKAGES += \
                     libglcore_32 \
                     libGLESv2_tegra_32 \
                     libnvRSDriver_32 \
+                    libcuda_32 \
+                    libnvidia-fatbinaryloader_32 \
                     libnvRSCompiler_32 \
                     libnvwsi_32 \
                     libEGL_tegra \

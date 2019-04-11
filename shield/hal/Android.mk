@@ -27,7 +27,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := camera.tegra
-ifeq ($(TARGET_TEGRA_VERSION),t210)
+ifeq ($(TARGET_TEGRA_VERSION),t124)
 LOCAL_SRC_FILES := lib/hw/camera.tegra.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/hw/camera.tegra.so
@@ -64,7 +64,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := gralloc.tegra
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/hw/gralloc.tegra.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/hw/gralloc.tegra.so

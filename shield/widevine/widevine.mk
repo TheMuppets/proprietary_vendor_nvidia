@@ -14,7 +14,9 @@
 
 PRODUCT_PACKAGES += \
                     liboemcrypto \
-                    libwvdrmengine
+                    libwvdrmengine \
+                    libdrmwvmplugin \
+                    libwvm
 
 ifeq ($(TARGET_ARCH),arm64)
 PRODUCT_PACKAGES += libwvdrmengine_32

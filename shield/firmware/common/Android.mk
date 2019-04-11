@@ -33,6 +33,17 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := fw_bcmdhd-43341
+LOCAL_SRC_FILES := bcm43341/sdio-ag-pno-p2p-proptxstatus-dmatxrc-rxov-pktfilter-keepalive-aoe-sr-wapi-wl11d.bin
+LOCAL_MODULE_SUFFIX := .bin
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/firmware
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nvidia
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+include $(CLEAR_VARS)
 LOCAL_MODULE := fw_bcmdhd-4354-N
 LOCAL_SRC_FILES := bcm4354/sdio-ag-p2p-pno-aoe-pktfilter-keepalive-sr-mchan-pktctx-proptxstatus-ampduhostreorder-lpc-pwropt-txbf-wl11u-mfp-tdls-ltecx-wfds-mchandump-atv-N.bin
 LOCAL_MODULE_SUFFIX := .bin
@@ -63,6 +74,16 @@ LOCAL_MODULE_OWNER := nvidia
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := bcm43341
+LOCAL_SRC_FILES := bcm43341/BCM43341B0_002.001.014.0008.0011.hcd
+LOCAL_MODULE_SUFFIX := .hcd
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/firmware
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nvidia
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE := bcm4329
 LOCAL_SRC_FILES := bcm4329/bcm4329.hcd
 LOCAL_MODULE_SUFFIX := .hcd
@@ -85,6 +106,16 @@ include $(BUILD_PREBUILT)
 include $(CLEAR_VARS)
 LOCAL_MODULE := nvram_43241
 LOCAL_SRC_FILES := bcm43241/bcm943241ipaagb_p100_hwoob.txt
+LOCAL_MODULE_SUFFIX := .txt
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/firmware
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_OWNER := nvidia
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := nvram_43341
+LOCAL_SRC_FILES := bcm43341/bcm943341wbfgn_4_hwoob.txt
 LOCAL_MODULE_SUFFIX := .txt
 LOCAL_MODULE_CLASS := ETC
 LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/firmware

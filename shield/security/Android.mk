@@ -120,7 +120,7 @@ include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libtsechdcp
-ifeq ($(TARGET_TEGRA_VERSION),t114)
+ifneq ($(filter t114 t124,$(TARGET_TEGRA_VERSION)),)
 LOCAL_SRC_FILES := lib/libtsechdcp.$(TARGET_TEGRA_VERSION).so
 else
 LOCAL_SRC_FILES := lib/libtsechdcp.so
