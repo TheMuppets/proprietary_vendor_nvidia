@@ -57,3 +57,7 @@ endif
 ifeq ($(TARGET_TEGRA_POWER),nvpower)
 include $(COMMON_PATH)/power/BoardPower.mk
 endif
+
+ifeq ($(TARGET_TEGRA_WIDEVINE),true)
+include $(COMMON_PATH)/widevine/BoardWidevine.mk
+endif
