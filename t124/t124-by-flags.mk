@@ -14,6 +14,10 @@
 
 LOCAL_PATH := vendor/nvidia/t124
 
+ifeq ($(TARGET_TEGRA_GPU),nvgpu-t124)
+$(call inherit-product, $(LOCAL_PATH)/nvgpu/nvgpu.mk)
+endif
+
 ifeq ($(TARGET_TEGRA_SENSORS),fusion520)
 $(call inherit-product, $(LOCAL_PATH)/sensors/fusion.mk)
 endif
