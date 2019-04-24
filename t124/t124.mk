@@ -14,6 +14,8 @@
 
 LOCAL_PATH := vendor/nvidia/t124
 
+$(call inherit-product, $(LOCAL_PATH)/t124-recovery.mk)
+
 # AVP firmware
 PRODUCT_PACKAGES += \
     nvavp_aacdec_ucode \
