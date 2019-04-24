@@ -12,16 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LOCAL_PATH := vendor/nvidia/t124
+LOCAL_PATH := vendor/nvidia/t124/nvmm
 
-ifeq ($(TARGET_TEGRA_GPU),nvgpu-t124)
-$(call inherit-product, $(LOCAL_PATH)/nvgpu/nvgpu.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_OMX),nvmm-t124)
-$(call inherit-product, $(LOCAL_PATH)/nvmm/nvmm.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_SENSORS),fusion520)
-$(call inherit-product, $(LOCAL_PATH)/sensors/fusion.mk)
-endif
+DEVICE_MANIFEST_FILE += $(LOCAL_PATH)/manifest.xml
