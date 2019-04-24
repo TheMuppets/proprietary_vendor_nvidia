@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/t124/t124.mk)
-$(call inherit-product, vendor/nvidia/t124/t124-by-flags.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/shieldtablet/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+$(call inherit-product, vendor/nvidia/common/bcm_firmware/bcm43241/device-bcm.mk)
+$(call inherit-product, $(LOCAL_PATH)/nvram.mk)
+
+PRODUCT_PACKAGES += \
+                    bcm43241 \
+                    bcm43341 \
+                    fw_bcmdhd_43341
