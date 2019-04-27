@@ -61,3 +61,7 @@ endif
 ifeq ($(TARGET_TEGRA_POWER),nvpower)
 $(call inherit-product, $(LOCAL_PATH)/power/power.mk)
 endif
+
+ifneq ($(filter $(TARGET_TEGRA_TOUCH), raydium),)
+$(call inherit-product, $(LOCAL_PATH)/raydium/raydium.mk)
+endif
