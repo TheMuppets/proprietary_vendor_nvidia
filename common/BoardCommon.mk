@@ -45,3 +45,7 @@ endif
 ifeq ($(TARGET_TEGRA_PHS),nvphs)
 include $(COMMON_PATH)/nvphs/BoardPhs.mk
 endif
+
+ifeq ($(TARGET_TEGRA_POWER),nvpower)
+include $(COMMON_PATH)/power/BoardPower.mk
+endif

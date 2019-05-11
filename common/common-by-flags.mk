@@ -45,3 +45,7 @@ endif
 ifeq ($(TARGET_TEGRA_PHS),nvphs)
 $(call inherit-product, $(LOCAL_PATH)/nvphs/nvphs.mk)
 endif
+
+ifeq ($(TARGET_TEGRA_POWER),nvpower)
+$(call inherit-product, $(LOCAL_PATH)/power/power.mk)
+endif

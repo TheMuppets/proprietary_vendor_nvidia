@@ -1,0 +1,4 @@
+service power-hal-1-0 /vendor/bin/hw/vendor.nvidia.hardware.power@1.0-service
+    class hal
+    user system
+    group system
