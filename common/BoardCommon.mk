@@ -42,6 +42,10 @@ ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore)
 include $(COMMON_PATH)/keystore/BoardKeystore.mk
 endif
 
+ifeq ($(TARGET_TEGRA_OMX),nvmm)
+include $(COMMON_PATH)/nvmm/BoardNvmm.mk
+endif
+
 ifeq ($(TARGET_TEGRA_PHS),nvphs)
 include $(COMMON_PATH)/nvphs/BoardPhs.mk
 endif
