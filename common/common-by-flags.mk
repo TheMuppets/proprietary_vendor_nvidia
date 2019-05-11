@@ -46,6 +46,10 @@ ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore)
 $(call inherit-product, $(LOCAL_PATH)/keystore/keystore.mk)
 endif
 
+ifeq ($(TARGET_TEGRA_MEMTRACK),nvmemtrack)
+$(call inherit-product, $(LOCAL_PATH)/memtrack/memtrack.mk)
+endif
+
 ifeq ($(TARGET_TEGRA_OMX),nvmm)
 $(call inherit-product, $(LOCAL_PATH)/nvmm/nvmm.mk)
 endif
