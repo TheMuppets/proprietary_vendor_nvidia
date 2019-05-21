@@ -26,6 +26,10 @@ ifeq ($(TARGET_TEGRA_GPS),brcm)
 $(call inherit-product, $(LOCAL_PATH)/gps/gps.mk)
 endif
 
+ifeq ($(TARGET_TEGRA_CAMERA),nvcamera)
+$(call inherit-product, $(LOCAL_PATH)/camera/nvcamera.mk)
+endif
+
 ifeq ($(NV_ANDROID_FRAMEWORK_ENHANCEMENTS),true)
 $(call inherit-product, $(LOCAL_PATH)/nvcpl/nvcpl.mk)
 endif

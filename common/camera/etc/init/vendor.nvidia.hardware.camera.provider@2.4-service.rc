@@ -1,0 +1,23 @@
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * NVIDIA CORPORATION and its licensors retain all intellectual property
+ * and proprietary rights in and to this software, related documentation
+ * and any modifications thereto.  Any use, reproduction, disclosure or
+ * distribution of this software and related documentation without an express
+ * license agreement from NVIDIA CORPORATION is strictly prohibited.
+ */
+on property:vendor.2g_ram_enabled=1
+    stop camera-hal-2.4
+
+service camera-hal-2.4 /vendor/bin/vendor.nvidia.hardware.camera.provider@2.4-service
+    class hal
+    user cameraserver
+    group audio camera input drmrpc
+    ioprio rt 4
+    writepid /dev/cpuset/camera-daemon/tasks /dev/stune/top-app/tasks
+
+on post-fs-data
+    # Create the Argus socket
+    mkdir /data/vendor/misc 0777 system system
+    mkdir /data/vendor/misc/argusipc 0777 system system
