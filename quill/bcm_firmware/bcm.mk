@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/t186/t186.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/quill/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+$(call inherit-product, vendor/nvidia/common/bcm_firmware/bcm4354/device-bcm.mk)
+$(call inherit-product, $(LOCAL_PATH)/clm.mk)
+$(call inherit-product, $(LOCAL_PATH)/nvram.mk)
+
+PRODUCT_PACKAGES += \
+                    bcm4350 \
+                    fw_bcmdhd_4354
