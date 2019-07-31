@@ -1,0 +1,29 @@
+<manifest version="1.0" type="device">
+    <hal format="hidl">
+        <name>vendor.nvidia.hardware.cpl.interfacecb</name>
+        <transport>hwbinder</transport>
+        <version>1.0</version>
+        <interface>
+            <name>INvCplInterfaceManager</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+    <hal format="hidl">
+        <name>vendor.nvidia.hardware.cpl.service</name>
+        <transport>hwbinder</transport>
+        <version>1.0</version>
+        <interface>
+            <name>INvCplHalService</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+    <hal format="hidl">
+        <name>vendor.nvidia.hardware.cpl.tools</name>
+        <transport>hwbinder</transport>
+        <version>1.0</version>
+        <interface>
+            <name>INvToolsApiHalService</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</manifest>

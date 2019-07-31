@@ -22,6 +22,10 @@ ifeq ($(TARGET_TEGRA_AUDIO),nvaudio)
 include $(COMMON_PATH)/audio/BoardAudio.mk
 endif
 
+ifeq ($(NV_ANDROID_FRAMEWORK_ENHANCEMENTS),true)
+include $(COMMON_PATH)/nvcpl/BoardCPL.mk
+endif
+
 ifeq ($(TARGET_TEGRA_CEC),nvhdmi)
 include $(COMMON_PATH)/hdmi/BoardHdmi.mk
 endif
