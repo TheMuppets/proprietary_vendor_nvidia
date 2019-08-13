@@ -1,0 +1,7 @@
+service nvidia.rpx /vendor/bin/hw/vendor.nvidia.hardware.shieldtech.rpx@1.0-service
+    interface vendor.nvidia.hardware.shieldtech.rpx@1.0::IRpxBinder default
+    class hal
+    user system
+    group system
+on post-fs-data
+     chmod 0700 /mnt/vendor/wifi_config

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+~ This file contains permission whitelist for shieldtech apps from
+  ~ nvidia that are put in the system partition
+-->
+<permissions>
+    <privapp-permissions package="com.nvidia.shieldtech.proxy">
+        <permission name="android.permission.UPDATE_DEVICE_STATS"/>
+        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+    </privapp-permissions>
+
+    <privapp-permissions package="com.nvidia.hotwordsetup">
+        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+    </privapp-permissions>
+</permissions>
