@@ -14,6 +14,10 @@
 
 SHIELD_PATH := vendor/nvidia/shield
 
+ifeq ($(TARGET_TEGRA_NVACCESSORIES),true)
+include $(SHIELD_PATH)/accessories/BoardAccessories.mk
+endif
+
 ifeq ($(NV_ANDROID_FRAMEWORK_ENHANCEMENTS),true)
 include $(SHIELD_PATH)/shieldtech/BoardShieldTech.mk
 endif
