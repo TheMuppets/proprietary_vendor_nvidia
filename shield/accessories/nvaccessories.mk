@@ -22,3 +22,15 @@ ifeq ($(PRODUCT_IS_ATV),true)
 PRODUCT_PACKAGES += AccessoryUiTv
 endif
 endif
+
+# Controller and remote firmware updates
+PRODUCT_COPY_FILES += \
+    $(foreach f,$(wildcard $(LOCAL_PATH)/firmware/Blake/*),$(f):$(TARGET_COPY_OUT_VENDOR)/oem/firmware/$(notdir $(f))) \
+    $(foreach f,$(wildcard $(LOCAL_PATH)/firmware/Thunderstrike/*),$(f):$(TARGET_COPY_OUT_VENDOR)/oem/firmware/$(notdir $(f)))
+
+ifeq ($(PRODUCT_IS_ATV),true)
+PRODUCT_COPY_FILES += \
+    $(foreach f,$(wildcard $(LOCAL_PATH)/firmware/Jarvis/*),$(f):$(TARGET_COPY_OUT_VENDOR)/oem/firmware/$(notdir $(f))) \
+    $(foreach f,$(wildcard $(LOCAL_PATH)/firmware/Pepper/*),$(f):$(TARGET_COPY_OUT_VENDOR)/oem/firmware/$(notdir $(f))) \
+    $(foreach f,$(wildcard $(LOCAL_PATH)/firmware/Friday/*),$(f):$(TARGET_COPY_OUT_VENDOR)/oem/firmware/$(notdir $(f)))
+endif
