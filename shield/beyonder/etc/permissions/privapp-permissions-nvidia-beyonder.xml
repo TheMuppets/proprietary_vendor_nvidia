@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ This file contains permission whitelist for beyonder from nvidia
+  ~ that are put in the system partition
+-->
+<permissions>
+    <privapp-permissions package="com.nvidia.shield.remote.server">
+        <permission name="android.permission.BIND_TV_REMOTE_SERVICE"/>
+        <permission name="android.permission.TV_VIRTUAL_REMOTE_CONTROLLER"/>
+        <permission name="android.permission.MODIFY_AUDIO_ROUTING"/>
+        <permission name="android.permission.CAPTURE_AUDIO_OUTPUT"/>
+        <permission name="android.permission.INSTALL_PACKAGES"/>
+        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+        <permission name="android.permission.HDMI_CEC"/>
+        <permission name="android.permission.MEDIA_CONTENT_CONTROL"/>
+        <permission name="android.permission.DELETE_PACKAGES"/>
+        <permission name="android.permission.WRITE_DREAM_STATE"/>
+        <permission name="android.permission.READ_DREAM_STATE"/>
+    </privapp-permissions>
+</permissions>
