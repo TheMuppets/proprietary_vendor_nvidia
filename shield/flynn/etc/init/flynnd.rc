@@ -1,0 +1,23 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#
+# NVIDIA Corporation and its licensors retain all intellectual property and
+# proprietary rights in and to this software and related documentation.  Any
+# use, reproduction, disclosure or distribution of this software and related
+# documentation without an express license agreement from NVIDIA Corporation
+# is strictly prohibited.
+
+service flynnd /vendor/bin/hw/flynnd
+    class early_hal
+    user system
+    group system net_raw
+    seclabel u:r:flynnd:s0
+    disabled
+
+on property:vendor.flynnd.enable=0
+    stop flynnd
+
+on property:vendor.flynnd.enable=1
+    start flynnd
+
+on boot
+    exec /vendor/bin/start_flynnd.sh
