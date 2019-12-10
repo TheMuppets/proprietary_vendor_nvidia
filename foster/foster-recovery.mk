@@ -12,13 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/foster/foster-recovery.mk)
-$(call inherit-product, vendor/nvidia/t210/t210.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/foster/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
-
-PRODUCT_PACKAGES += public.libraries
-
-# Switch reboot2payload hekate
-PRODUCT_PACKAGES += reboot_payload
+# Firmware
+PRODUCT_COPY_FILES += \
+                      vendor/nvidia/foster/firmware/hekate.bin:recovery/root/etc/firmware/reboot_payload.bin

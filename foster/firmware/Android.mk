@@ -1,4 +1,4 @@
-# Copyright (C) 2019 The LineageOS Project
+# Copyright (C) 2019 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/foster/foster-recovery.mk)
-$(call inherit-product, vendor/nvidia/t210/t210.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/foster/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+LOCAL_PATH := $(call my-dir)
 
-PRODUCT_PACKAGES += public.libraries
-
-# Switch reboot2payload hekate
-PRODUCT_PACKAGES += reboot_payload
+include $(CLEAR_VARS)
+LOCAL_MODULE               := reboot_payload
+LOCAL_SRC_FILES            := hekate.bin
+LOCAL_MODULE_SUFFIX        := .bin
+LOCAL_MODULE_CLASS         := ETC
+LOCAL_MODULE_PATH          := $(TARGET_OUT_VENDOR)/firmware/
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+include $(BUILD_NVIDIA_ARCH_PREBUILT)
