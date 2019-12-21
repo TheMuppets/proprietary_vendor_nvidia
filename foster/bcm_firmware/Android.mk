@@ -84,6 +84,15 @@ LOCAL_MODULE_OWNER         := nvidia
 include $(BUILD_NVIDIA_PREBUILT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE               := brcmfmac4356-pcie.nintendo,icosa.txt
+LOCAL_SRC_FILES            := bcm4356/nvram_icosa_4356.txt
+LOCAL_MODULE_CLASS         := ETC
+LOCAL_MODULE_PATH          := $(TARGET_OUT_VENDOR)/firmware
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+include $(BUILD_NVIDIA_PREBUILT)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE               := bcmdhd_clm_darcy
 LOCAL_SRC_FILES            := bcm4354/darcy.clm_blob
 LOCAL_MODULE_SUFFIX        := .blob
