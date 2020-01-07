@@ -18,6 +18,7 @@ $(call inherit-product, $(LOCAL_PATH)/nvram.mk)
 
 PRODUCT_PACKAGES += \
                     bcm4350 \
+                    BCM4354A2-13d3-3488 \
                     bcm4356 \
                     fw_bcmdhd_4356 \
                     brcmfmac4356-pcie
