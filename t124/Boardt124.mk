@@ -14,6 +14,10 @@
 
 COMMON_PATH := vendor/nvidia/t124
 
+ifeq ($(TARGET_TEGRA_CAMERA),nvcamera-t124)
+include $(COMMON_PATH)/camera/BoardCamera.mk
+endif
+
 ifeq ($(TARGET_TEGRA_GPU),nvgpu-t124)
 include $(COMMON_PATH)/nvgpu/BoardNvgpu.mk
 endif
