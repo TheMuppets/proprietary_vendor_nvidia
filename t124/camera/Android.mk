@@ -210,3 +210,14 @@ LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
 include $(BUILD_NVIDIA_ARCH_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE               := libprotobuf-cpp-lold
+LOCAL_SRC_FILES            := lib/libprotobuf-cpp-lold.so
+LOCAL_MODULE_SUFFIX        := .so
+LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
+LOCAL_MODULE_TARGET_ARCH   := arm
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+LOCAL_VENDOR_MODULE        := true
+include $(BUILD_NVIDIA_ARCH_PREBUILT)
