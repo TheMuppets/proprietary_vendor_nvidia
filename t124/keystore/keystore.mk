@@ -12,24 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LOCAL_PATH := vendor/nvidia/t124
-
-ifeq ($(TARGET_TEGRA_CAMERA),nvcamera-t124)
-$(call inherit-product, $(LOCAL_PATH)/camera/nvcamera.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_GPU),nvgpu-t124)
-$(call inherit-product, $(LOCAL_PATH)/nvgpu/nvgpu.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore-t124)
-$(call inherit-product, $(LOCAL_PATH)/keystore/keystore.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_OMX),nvmm-t124)
-$(call inherit-product, $(LOCAL_PATH)/nvmm/nvmm.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_SENSORS),fusion520)
-$(call inherit-product, $(LOCAL_PATH)/sensors/fusion.mk)
-endif
+PRODUCT_PACKAGES += \
+                    android.hardware.keymaster@3.0-impl \
+                    android.hardware.keymaster@3.0-service \
+                    keystore.tegra

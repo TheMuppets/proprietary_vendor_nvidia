@@ -22,6 +22,10 @@ ifeq ($(TARGET_TEGRA_GPU),nvgpu-t124)
 include $(COMMON_PATH)/nvgpu/BoardNvgpu.mk
 endif
 
+ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore-t124)
+include $(COMMON_PATH)/keystore/BoardKeystore.mk
+endif
+
 ifeq ($(TARGET_TEGRA_OMX),nvmm-t124)
 include $(COMMON_PATH)/nvmm/BoardNvmm.mk
 endif

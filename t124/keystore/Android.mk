@@ -12,24 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LOCAL_PATH := vendor/nvidia/t124
+LOCAL_PATH := $(call my-dir)
 
-ifeq ($(TARGET_TEGRA_CAMERA),nvcamera-t124)
-$(call inherit-product, $(LOCAL_PATH)/camera/nvcamera.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_GPU),nvgpu-t124)
-$(call inherit-product, $(LOCAL_PATH)/nvgpu/nvgpu.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_KEYSTORE),nvkeystore-t124)
-$(call inherit-product, $(LOCAL_PATH)/keystore/keystore.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_OMX),nvmm-t124)
-$(call inherit-product, $(LOCAL_PATH)/nvmm/nvmm.mk)
-endif
-
-ifeq ($(TARGET_TEGRA_SENSORS),fusion520)
-$(call inherit-product, $(LOCAL_PATH)/sensors/fusion.mk)
-endif
+include $(CLEAR_VARS)
+LOCAL_MODULE               := keystore.tegra
+LOCAL_SRC_FILES_32         := lib/hw/keystore.tegra.so
+LOCAL_MULTILIB             := 32
+LOCAL_MODULE_SUFFIX        := .so
+LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+LOCAL_VENDOR_MODULE        := true
+LOCAL_MODULE_RELATIVE_PATH := hw
+include $(BUILD_NVIDIA_ARCH_PREBUILT)
