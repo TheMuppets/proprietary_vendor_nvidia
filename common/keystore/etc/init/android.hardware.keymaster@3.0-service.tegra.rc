@@ -1,4 +1,13 @@
+on property:ro.boot.secureos=tlk
+    stop vendor.keymaster-3-0
+    start vendor.keymaster-3-0.tegra
+
+on property:ro.boot.secureos=trusty
+    stop vendor.keymaster-3-0
+    start vendor.keymaster-3-0.tegra
+
 service vendor.keymaster-3-0.tegra /vendor/bin/hw/android.hardware.keymaster@3.0-service.tegra
     class early_hal
     user system
     group system drmrpc
+    disabled
