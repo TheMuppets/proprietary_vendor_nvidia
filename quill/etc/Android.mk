@@ -1,4 +1,4 @@
-# Copyright (C) 2019 The LineageOS Project
+# Copyright (C) 2017 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/t186/t186.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/quill/bcm_firmware/bcm.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+LOCAL_PATH := $(call my-dir)
 
-PRODUCT_PACKAGES += public.libraries
+include $(CLEAR_VARS)
+LOCAL_MODULE               := public.libraries
+LOCAL_SRC_FILES            := public.libraries.txt
+LOCAL_MODULE_SUFFIX        := .txt
+LOCAL_MODULE_CLASS         := ETC
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+LOCAL_VENDOR_MODULE        := true
+include $(BUILD_NVIDIA_PREBUILT)
