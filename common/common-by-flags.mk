@@ -65,3 +65,7 @@ endif
 ifneq ($(filter $(TARGET_TEGRA_TOUCH), raydium),)
 $(call inherit-product, $(LOCAL_PATH)/raydium/raydium.mk)
 endif
+
+ifneq ($(filter $(TARGET_TEGRA_TOUCH), sharp),)
+$(call inherit-product, $(LOCAL_PATH)/shtouch/shtouch.mk)
+endif
