@@ -1,4 +1,4 @@
-# Copyright (C) 2019 The LineageOS Project
+# Copyright (C) 2020 The LineageOS Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$(call inherit-product, vendor/nvidia/t194/t194.mk)
-$(call inherit-product, vendor/nvidia/common/common-by-flags.mk)
-$(call inherit-product, vendor/nvidia/galen/realtek.mk)
-$(call inherit-product, vendor/nvidia/shield/shield-by-flags.mk)
+PRODUCT_PACKAGES += \
+    rtl8822cu_config \
+    rtl8822cu_fw \
+    rtl8822_setting
