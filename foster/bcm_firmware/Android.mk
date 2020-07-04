@@ -75,6 +75,16 @@ LOCAL_MODULE_OWNER         := nvidia
 include $(BUILD_NVIDIA_PREBUILT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE               := nvram_smaug_4354
+LOCAL_SRC_FILES            := bcm4354/bcmdhd.cal
+LOCAL_MODULE_SUFFIX        := .txt
+LOCAL_MODULE_CLASS         := ETC
+LOCAL_MODULE_PATH          := $(TARGET_OUT_VENDOR)/firmware
+LOCAL_MODULE_TAGS          := optional
+LOCAL_MODULE_OWNER         := nvidia
+include $(BUILD_NVIDIA_PREBUILT)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE               := brcmfmac4356-pcie.txt
 LOCAL_SRC_FILES            := bcm4356/brcmfmac4356-pcie.txt
 LOCAL_MODULE_CLASS         := ETC
