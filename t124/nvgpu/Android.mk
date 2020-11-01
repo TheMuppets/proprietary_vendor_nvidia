@@ -16,10 +16,11 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := gralloc.tegra
-LOCAL_SRC_FILES            := lib/hw/gralloc.tegra.so
+LOCAL_SRC_FILES_32         := lib/hw/gralloc.tegra.so
+LOCAL_SRC_FILES_64         := lib64/hw/gralloc.tegra.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -28,10 +29,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := hwcomposer.tegra
-LOCAL_SRC_FILES            := lib/hw/hwcomposer.tegra.so
+LOCAL_SRC_FILES_32         := lib/hw/hwcomposer.tegra.so
+LOCAL_SRC_FILES_64         := lib64/hw/hwcomposer.tegra.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -40,10 +42,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libEGL_tegra
-LOCAL_SRC_FILES            := lib/egl/libEGL_tegra.so
+LOCAL_SRC_FILES_32         := lib/egl/libEGL_tegra.so
+LOCAL_SRC_FILES_64         := lib64/egl/libEGL_tegra.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -52,10 +55,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libGLESv1_CM_tegra
-LOCAL_SRC_FILES            := lib/egl/libGLESv1_CM_tegra.so
+LOCAL_SRC_FILES_32         := lib/egl/libGLESv1_CM_tegra.so
+LOCAL_SRC_FILES_64         := lib64/egl/libGLESv1_CM_tegra.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -64,10 +68,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libGLESv2_tegra
-LOCAL_SRC_FILES            := lib/egl/libGLESv2_tegra.so
+LOCAL_SRC_FILES_32         := lib/egl/libGLESv2_tegra.so
+LOCAL_SRC_FILES_64         := lib64/egl/libGLESv2_tegra.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -76,21 +81,24 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libglcore
-LOCAL_SRC_FILES            := lib/libglcore.so
+LOCAL_SRC_FILES_32         := lib/libglcore.so
+LOCAL_SRC_FILES_64         := lib64/libglcore.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
+LOCAL_REQUIRED_MODULES     := com.nvidia.feature.opengl4.xml com.nvidia.nvsi.xml
 include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvblit
-LOCAL_SRC_FILES            := lib/libnvblit.so
+LOCAL_SRC_FILES_32         := lib/libnvblit.so
+LOCAL_SRC_FILES_64         := lib64/libnvblit.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -98,10 +106,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvddk_2d_v2
-LOCAL_SRC_FILES            := lib/libnvddk_2d_v2.so
+LOCAL_SRC_FILES_32         := lib/libnvddk_2d_v2.so
+LOCAL_SRC_FILES_64         := lib64/libnvddk_2d_v2.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -109,10 +118,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvddk_vic
-LOCAL_SRC_FILES            := lib/libnvddk_vic.so
+LOCAL_SRC_FILES_32         := lib/libnvddk_vic.so
+LOCAL_SRC_FILES_64         := lib64/libnvddk_vic.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -120,21 +130,24 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvglsi
-LOCAL_SRC_FILES            := lib/libnvglsi.so
+LOCAL_SRC_FILES_32         := lib/libnvglsi.so
+LOCAL_SRC_FILES_64         := lib64/libnvglsi.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
+LOCAL_REQUIRED_MODULES     := libnvwsi
 include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvgr
-LOCAL_SRC_FILES            := lib/libnvgr.so
+LOCAL_SRC_FILES_32         := lib/libnvgr.so
+LOCAL_SRC_FILES_64         := lib64/libnvgr.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -142,21 +155,24 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvhwc_service
-LOCAL_SRC_FILES            := lib/libnvhwc_service.so
+LOCAL_SRC_FILES_32         := lib/libnvhwc_service.so
+LOCAL_SRC_FILES_64         := lib64/libnvhwc_service.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
+LOCAL_REQUIRED_MODULES     := libcuda
 include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvrmapi_tegra
-LOCAL_SRC_FILES            := lib/libnvrmapi_tegra.so
+LOCAL_SRC_FILES_32         := lib/libnvrmapi_tegra.so
+LOCAL_SRC_FILES_64         := lib64/libnvrmapi_tegra.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -164,10 +180,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvrm_graphics
-LOCAL_SRC_FILES            := lib/libnvrm_graphics.so
+LOCAL_SRC_FILES_32         := lib/libnvrm_graphics.so
+LOCAL_SRC_FILES_64         := lib64/libnvrm_graphics.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -175,10 +192,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvrm_gpu
-LOCAL_SRC_FILES            := lib/libnvrm_gpu.so
+LOCAL_SRC_FILES_32         := lib/libnvrm_gpu.so
+LOCAL_SRC_FILES_64         := lib64/libnvrm_gpu.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -186,10 +204,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvrm
-LOCAL_SRC_FILES            := lib/libnvrm.so
+LOCAL_SRC_FILES_32         := lib/libnvrm.so
+LOCAL_SRC_FILES_64         := lib64/libnvrm.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -197,10 +216,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libnvwsi
-LOCAL_SRC_FILES            := lib/libnvwsi.so
+LOCAL_SRC_FILES_32         := lib/libnvwsi.so
+LOCAL_SRC_FILES_64         := lib64/libnvwsi.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
@@ -208,10 +228,11 @@ include $(BUILD_NVIDIA_ARCH_PREBUILT)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE               := libcuda
-LOCAL_SRC_FILES            := lib/libcuda.so
+LOCAL_SRC_FILES_32         := lib/libcuda.so
+LOCAL_SRC_FILES_64         := lib64/libcuda.so
+LOCAL_MULTILIB             := both
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
 LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true

@@ -19,14 +19,10 @@ PRODUCT_PACKAGES += \
                     android.hardware.graphics.mapper@2.0-impl \
                     gralloc.tegra \
                     hwcomposer.tegra \
-                    vulkan.nvgpu \
+                    vulkan.tegra \
                     libEGL_tegra \
                     libGLESv1_CM_tegra \
-                    libGLESv2_tegra \
-                    libnvwsi \
-                    libcuda \
-                    com.nvidia.feature.opengl4.xml \
-                    com.nvidia.nvsi.xml
+                    libGLESv2_tegra
 
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.opengles.aep.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.opengles.aep.xml \
@@ -36,8 +32,4 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.opengles.version=196610 \
     persist.tegra.compositor=glcomposer \
-    persist.tegra.decompression=cde-client \
-    ro.hardware.vulkan=nvgpu \
-    debug.sf.latch_unsignaled=1 \
-    debug.sf.disable_backpressure=1 \
-    persist.tegra.compositor=gldrawtexture
+    persist.tegra.decompression=cde-client
