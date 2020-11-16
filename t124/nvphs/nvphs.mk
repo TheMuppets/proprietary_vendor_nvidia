@@ -13,14 +13,4 @@
 # limitations under the License.
 
 PRODUCT_PACKAGES += \
-                    nvphsd \
-                    libnvgov_boot \
-                    libnvgov_camera \
-                    libnvgov_force \
-                    libnvgov_generic \
-                    libnvgov_gpucompute \
-                    libnvgov_graphics \
-                    libnvgov_il \
-                    libnvgov_spincircle \
-                    libnvgov_tbc \
-                    libnvgov_ui
+    nvphsd
