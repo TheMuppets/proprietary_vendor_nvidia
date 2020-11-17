@@ -23,8 +23,3 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     nvhost_msenc02 \
     nvhost_tsec
-
-# Oemcrypto
-ifeq ($(TARGET_TEGRA_WIDEVINE),true)
-PRODUCT_PACKAGES += liboemcrypto
-endif
