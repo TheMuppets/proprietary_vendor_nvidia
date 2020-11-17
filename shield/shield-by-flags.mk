@@ -22,10 +22,6 @@ ifeq ($(NV_ANDROID_BEYONDER_ENHANCEMENTS),true)
 $(call inherit-product, $(LOCAL_PATH)/beyonder/beyonder.mk)
 endif
 
-ifeq ($(TARGET_TEGRA_VARIANT),shield)
-#$(call inherit-product, $(LOCAL_PATH)/flynn/flynn.mk)
-endif
-
 ifeq ($(NV_ANDROID_SHIELDTECH_ENHANCEMENTS),true)
 $(call inherit-product, $(LOCAL_PATH)/accessories/nvaccessories.mk)
 endif
