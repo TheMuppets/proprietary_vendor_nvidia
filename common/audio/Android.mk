@@ -44,7 +44,7 @@ LOCAL_MODULE_TAGS          := optional
 LOCAL_MODULE_OWNER         := nvidia
 LOCAL_VENDOR_MODULE        := true
 LOCAL_MODULE_RELATIVE_PATH := hw
-LOCAL_REQUIRED_MODULES     := cp_pgm_one_dap_lib cp_pgm_two_dap_lib cp_sys_one_dap_lib cp_sys_two_dap_lib dap_lib ddp_enc_lib ddp_enc_lib_ac3 ddp_enc_lib_eac3 ddp_udc_lib dp_dap_lib
+LOCAL_REQUIRED_MODULES     := cp_pgm_one_dap_lib cp_pgm_two_dap_lib cp_sys_one_dap_lib cp_sys_two_dap_lib ddp_enc_lib_ac3 ddp_enc_lib_eac3 ddp_udc_lib dp_dap_lib
 include $(BUILD_NVIDIA_COMMON_PREBUILT)
 
 include $(CLEAR_VARS)
@@ -112,28 +112,6 @@ include $(BUILD_NVIDIA_COMMON_PREBUILT)
 include $(CLEAR_VARS)
 LOCAL_MODULE               := cp_sys_two_dap_lib
 LOCAL_SRC_FILES            := lib/cp_sys_two_dap_lib.so
-LOCAL_MODULE_SUFFIX        := .so
-LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
-LOCAL_MODULE_TAGS          := optional
-LOCAL_MODULE_OWNER         := nvidia
-LOCAL_VENDOR_MODULE        := true
-include $(BUILD_NVIDIA_COMMON_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE               := dap_lib
-LOCAL_SRC_FILES            := lib/dap_lib.so
-LOCAL_MODULE_SUFFIX        := .so
-LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MODULE_TARGET_ARCH   := arm
-LOCAL_MODULE_TAGS          := optional
-LOCAL_MODULE_OWNER         := nvidia
-LOCAL_VENDOR_MODULE        := true
-include $(BUILD_NVIDIA_COMMON_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE               := ddp_enc_lib
-LOCAL_SRC_FILES            := lib/ddp_enc_lib.so
 LOCAL_MODULE_SUFFIX        := .so
 LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
 LOCAL_MODULE_TARGET_ARCH   := arm
