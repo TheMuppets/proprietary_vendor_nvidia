@@ -71,14 +71,6 @@ ifeq ($(TARGET_TEGRA_POWER),nvpower)
 $(call inherit-product, $(LOCAL_PATH)/power/power.mk)
 endif
 
-ifneq ($(filter $(TARGET_TEGRA_TOUCH), raydium),)
-$(call inherit-product, $(LOCAL_PATH)/raydium/raydium.mk)
-endif
-
-ifneq ($(filter $(TARGET_TEGRA_TOUCH), sharp),)
-$(call inherit-product, $(LOCAL_PATH)/shtouch/shtouch.mk)
-endif
-
 ifeq ($(TARGET_TEGRA_WIDEVINE),true)
 $(call inherit-product, $(LOCAL_PATH)/widevine/widevine.mk)
 endif
