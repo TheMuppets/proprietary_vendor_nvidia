@@ -1,0 +1,172 @@
+# Sample variables file for BCM94356ZAE NGFF 22x30mm iPA, iLNA board with PCIe for production package
+NVRAMRev=$Rev: 607619 $ #Rev002
+#4356 chip = 4356 A3 chip
+sromrev=11
+boardrev=0x1250
+boardtype=0x074a
+# BFL_PALDO           0x02000000  Power topology uses PALDO
+# BFL_FEM_BT          0x00400000  Board has FEM and switch to share antenna w/ BT
+# BFL_BTCOEX          0x00000001  Board supports BTCOEX
+boardflags=0x02400001
+
+# BFL2_LNA1BYPFORTR5G 0x80000000  acphy, enable lna1 bypass for 5G clip lo
+# BFL2_LNA1BYPFORTR2G 0x40000000  acphy, enable lna1 bypass for 2G clip lo
+# BFL2_BT_SHARE_ANT0  0x00800000  share core0 antenna with BT
+# BFL2_2G_SPUR_WAR    0x00002000  WAR to reduce and avoid clock-harmonic spurs in 2G
+boardflags2=0xc0802000
+
+# BFL3_RCAL_WAR       0x00000008  rcal war active on this board
+# BFL3_FEMCTRL_SUB    0x00000007  subrevs of femctrl on top of srom_femctrl
+# BFL3_FEMTBL_FROM_NVRAM 0x00000100   acphy, femctrl table is read from nvram
+boardflags3=0x00000108
+
+macaddr=00:90:4c:1a:a0:01
+ccode=XV
+regrev=0
+antswitch=0
+pdgain5g=4
+pdgain2g=4
+
+#enable GPIOs
+muxenab=0x11
+
+
+# RFSWCTRL 2G and 5G iLNA
+#            WL_TX,     WL_RX,     WL_RX_ATTN, BT_TX_RX, WL_MASK
+swctrlmap_2g=0x11411141,0x42124212,0x10401040,0x00211212,0x000000ff
+swctrlmap_5g=0x42124212,0x41114111,0x42124212,0x00211212,0x000000ff
+
+swctrlmapext_2g=0x00000000,0x00000000,0x00000000,0x000000,0x003
+swctrlmapext_5g=0x00000000,0x00000000,0x00000000,0x000000,0x003
+########################################################
+
+
+#enable low latency calibration
+phycal_tempdelta=50
+papdtempcomp_tempdelta=20
+fastpapdgainctrl=1
+
+#for 2 range tssi
+olpc_thresh=0
+lowpowerrange2g=0
+tworangetssi2g=0            #Changed from 1
+lowpowerrange5g=0
+tworangetssi5g=0            #Changed from 1
+
+# energy detect threshold
+ed_thresh2g=-75
+ed_thresh5g=-75
+# energy detect threshold for EU
+eu_edthresh2g=-75
+eu_edthresh5g=-75
+
+paprdis=0
+femctrl=10
+vendid=0x14e4
+devid=0x43ec
+manfid=0x2d0
+#prodid=0x052e
+nocrc=1
+otpimagesize=502
+xtalfreq=37400
+rxchain=3
+txchain=3
+aa2g=3
+aa5g=3
+agbg0=2
+agbg1=2
+aga0=2
+aga1=2
+tssipos2g=1
+extpagain2g=2
+tssipos5g=1
+extpagain5g=2
+tempthresh=255
+tempoffset=255
+rawtempsense=0x1ff
+
+#2g_1range tssi
+#pa2ga0=-147,6192,-705
+#pa2ga1=-161,6041,-701
+
+#2g_2range tssi
+#high range +11 to +20dbm
+#Bellow PA params are from DarcyA08
+pa2ga0=0XFF5A,0X16F0,0XFD39
+pa2ga1=0XFF5B,0X1792,0XFD30
+
+#low range 0 to +12dbm
+#pa2ga2=0XFF5A,0X16F0,0XFD39
+#pa2ga3=0XFF5B,0X1792,0XFD30
+
+#5g_2range tssi_4356zae -> collect data from five boards
+#high power +8 to +18dbm
+#Bellow PA params are from DarcyA08
+pa5ga0=0XFF4A,0X18D1,0XFD07,0XFF48,0X1824,0XFD14,0XFF3C,0X15B9,0XFD49,0XFF61,0X16E0,0XFD3E
+pa5ga1=0XFF3C,0X181B,0XFD11,0XFF33,0X1788,0XFD18,0XFF4E,0X187F,0XFD11,0XFF4B,0X1775,0XFD24
+#low power 0 to +11dbm
+#pa5ga2=0XFF4A,0X18D1,0XFD07,0XFF48,0X1824,0XFD14,0XFF3C,0X15B9,0XFD49,0XFF61,0X16E0,0XFD3E
+#pa5ga3=0XFF3C,0X181B,0XFD11,0XFF33,0X1788,0XFD18,0XFF4E,0X187F,0XFD11,0XFF4B,0X1775,0XFD24
+
+subband5gver=0x4
+pdoffsetcckma0=0x4
+pdoffsetcckma1=0x4
+pdoffset40ma0=0x0000
+pdoffset80ma0=0x0000
+pdoffset40ma1=0x0000
+pdoffset80ma1=0x0000
+
+#Max power below were set to match the power with power table in june.
+#Modified mcsbw205ghpo=0xdcb66663 to 0xdcba6663 Nov-2018, NVBUG-2386945
+
+#Bellow Backoff is copied from DarcyA08
+maxp2ga0=86
+maxp5ga0=86,86,86,86
+maxp2ga1=86
+maxp5ga1=86,86,86,86
+cckbw202gpo=0x0000
+cckbw20ul2gpo=0x0000
+mcsbw202gpo=0x99d44422
+mcsbw402gpo=0x99644422
+dot11agofdmhrbw202gpo=0x6666
+ofdmlrbw202gpo=0x0022
+mcsbw205glpo=0x88966663
+mcsbw405glpo=0x88666663
+mcsbw805glpo=0xbb666665
+mcsbw205gmpo=0xd8866663
+mcsbw405gmpo=0x88666663
+mcsbw805gmpo=0xcc666665
+mcsbw205ghpo=0xdcba6663
+
+#Backoff power increased from 0xaa666663 to 0xeea66663 (1Dec 2016)
+mcsbw405ghpo=0xeea66663
+mcsbw805ghpo=0xdd666665
+
+#5G band subband 11ag/11n/11ac QPSK power reduction offset
+mcslr5glpo=0x0000
+mcslr5gmpo=0x0000
+mcslr5ghpo=0x0000
+
+sb20in40hrpo=0x0
+sb20in80and160hr5glpo=0x0
+sb40and80hr5glpo=0x0
+sb20in80and160hr5gmpo=0x0
+sb40and80hr5gmpo=0x0
+sb20in80and160hr5ghpo=0x0
+sb40and80hr5ghpo=0x0
+sb20in40lrpo=0x0
+sb20in80and160lr5glpo=0x0
+sb40and80lr5glpo=0x0
+sb20in80and160lr5gmpo=0x0
+sb40and80lr5gmpo=0x0
+sb20in80and160lr5ghpo=0x0
+sb40and80lr5ghpo=0x0
+dot11agduphrpo=0x0
+dot11agduplrpo=0x0
+temps_period=15
+temps_hysteresis=15
+rssicorrnorm_c0=4,4
+rssicorrnorm_c1=4,4
+#/low20,40,80/mid20,40,80/high20,40,80/X1 20,40,80/
+rssicorrnorm5g_c0=1,2,3,1,2,3,6,6,8,6,6,8
+rssicorrnorm5g_c1=1,2,3,2,2,2,7,7,8,7,7,8
