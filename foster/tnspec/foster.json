@@ -1,0 +1,2330 @@
+{
+    "copyright" : "Copyright (c) 2014-2018, NVIDIA CORPORATION.  All rights reserved.",
+    "family" : "T210/Hawkeye/Foster/Loki",
+    "version" : "2.1",
+    "var_types" : {
+        "_mode" : {
+            "#" : [ "0 - Unfused",
+                    "1 - Fused" ],
+            "0" : "lambda x: ((x[0:1] in '13') and (x[6:7] != '2')) or ((x[0:1] in '08') and (x[6:7] == '2'))",
+            "1" : "lambda x: ((x[0:1] in '56') and (x[6:7] != '2')) or ((x[0:1] in '1459cd') and (x[6:7] == '2'))"
+        },
+        "_mode_string_idx" : {
+            "0"  : "default",
+            "1"  : "lambda x: (x[0:1] == '1') and (x[6:7] != '2')", "#" : "[T210 A0X UNFUSED] Preproduction Mode",
+            "2"  : "lambda x: (x[0:1] == '3') and (x[6:7] != '2')", "#" : "[T210 A0X UNFUSED] NvProduction Mode",
+            "3"  : "lambda x: (x[0:1] == '5') and (x[6:7] != '2')", "#" : "[T210 A0X FUSED] Secure SBK Mode",
+            "4"  : "lambda x: (x[0:1] == '6') and (x[6:7] != '2')", "#" : "[T210 A0X FUSED] Secure PKC Mode",
+            "5"  : "lambda x: (x[0:1] == '0') and (x[6:7] == '2')", "#" : "[T210 B0X UNSECURED] Preproduction AES CMAC + Without Encryption",
+            "6"  : "lambda x: (x[0:1] == '1') and (x[6:7] == '2')", "#" : "[T210 B0X SECURED] Preproduction RSA + Without Encryption",
+            "7"  : "lambda x: (x[0:1] == '4') and (x[6:7] == '2')", "#" : "[T210 B0X SECURED] Preproduction AES CMAC + With Encryption",
+            "8"  : "lambda x: (x[0:1] == '5') and (x[6:7] == '2')", "#" : "[T210 B0X SECURED] Preproduction RSA + With Encryption",
+            "9"  : "lambda x: (x[0:1] == '8') and (x[6:7] == '2')", "#" : "[T210 B0X UNSECURED] Production  AES CMAC + Without Encryption",
+            "10" : "lambda x: (x[0:1] == '9') and (x[6:7] == '2')", "#" : "[T210 B0X SECURED] Production RSA + Without Encryption",
+            "11" : "lambda x: (x[0:1] == 'c') and (x[6:7] == '2')", "#" : "[T210 B0X SECURED] Production AES CMAC + With Encryption",
+            "12" : "lambda x: (x[0:1] == 'd') and (x[6:7] == '2')", "#" : "[T210 B0X SECURED] Production RSA + With Encryption"
+        },
+        "_chip_rev" : {
+            "#" : [ "0 - T210 A01",
+                    "1 - T210 B01"],
+            "0" : "default",
+            "1" : "lambda x: x[6:7] == '2'"
+        },
+        "_arch" : {
+            "#" : [ "0 - T210",
+                    "1 - T210B01"],
+            "0" : "default",
+            "1" : "lambda x: (x == 't210b01')"
+        },
+        "_mode_by_chip" : {
+            "#" : [ "0 - Unfused - A0X",
+                    "1 - Unfused - B0X",
+                    "2 - Fused - A0X",
+                    "3 - Fused - B0X" ],
+            "0" : "lambda x: (x[0:1] in '13') and (x[6:7] != '2')",
+            "1" : "lambda x: (x[0:1] in '08') and (x[6:7] == '2')",
+            "2" : "lambda x: (x[0:1] in '56') and (x[6:7] != '2')",
+            "3" : "lambda x: (x[0:1] in '1459cd') and (x[6:7] == '2')"
+        },
+        "_err" : {
+            "none" : "default",
+            "unsupported" : "lambda x: ((x[0:1] not in '1356') and (x[6:7] != '2')) or ((x[0:1] not in '014589cd') and (x[6:7] == '2'))"
+        }
+    },
+    "settings" : {
+        "flash" : {
+            "vars" : {
+                "_mode" : [ "arg_secure", "flash_cmd"],
+                "_mode_by_chip" : [ "bl", "applet" ],
+                "_chip_rev" : [ "chip", "tnspecs" ],
+                "_arch" : [ "dryrun_ecid" ],
+                "_mode_string_idx" : [ "mode_string" ]
+            },
+           "driver" : "tegraflash",
+           "interface" : "current",
+           "bl" : ["cboot.bin", "cboot.bin", "cboot.bin.signed", "cboot_t210b01.bin.signed"],
+           "applet" : ["nvtboot_recovery.bin", "nvtboot_recovery_t210b01.bin",
+                       "rcm_1_signed.rcm", "rcm_1_signed_t210b01.rcm"],
+           "chip" : ["0x21", "\"0x21 0x2\""],
+           "tnspecs" : [ "tnspec_foster.json", "tnspec.json" ],
+           "arg_secure" : [ " ", "--securedev"],
+           "flash_cmd" : [ "flash;", "secureflash;"],
+           "default_cmd" : "",
+           "dryrun_ecid" : [ "12100001deadbeefec1dface12345678",
+                             "12100021deadbeefec1dface12345678" ],
+           "mode_string" : [
+              "[UNKNOWN] PLEASE CHECK YOUR DEVICE",
+              "[T210 A0X UNFUSED] Preproduction Mode",
+              "[T210 A0X UNFUSED] NvProduction Mode",
+              "[T210 A0X FUSED] Secure SBK Mode",
+              "[T210 A0X FUSED] Secure PKC Mode",
+              "[T210 B0X UNSECURED] Preproduction AES CMAC + Without Encryption",
+              "[T210 B0X SECURED] Preproduction RSA + Without Encryption",
+              "[T210 B0X SECURED] Preproduction AES CMAC + With Encryption",
+              "[T210 B0X SECURED] Preproduction RSA + With Encryption",
+              "[T210 B0X UNSECURED] Production  AES CMAC + Without Encryption",
+              "[T210 B0X SECURED] Production RSA + Without Encryption",
+              "[T210 B0X SECURED] Production AES CMAC + With Encryption",
+              "[T210 B0X SECURED] Production RSA + With Encryption" ]
+        },
+        "tnspec_server" : "https://tnspec.nvidia.com:11126"
+    },
+    "hw" : {
+        "#" : "'.' indicates the corresponding keys do not get copied when based",
+        "." : ["desc"],
+        "#" : "--------- Loki-E and Foster-E Platforms ---------",
+        "e2220-1170-a00" : {
+            "base" : "&uuid",
+            "desc" : "T210/ERS Bringup/LPDDR3",
+            "id" : "E2220-A00",
+            "dbgport" : "0",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id"  : "2220",
+                "sku" : "1100",
+                "fab" : "0"
+            },
+            "pmu" : {
+                "id"  : "2174",
+                "sku" : "1101"
+            },
+            "disp" : {
+                "id"  : "2129",
+                "sku" : "1000",
+                "uuid" : "4e007826-df09-4f68-8df8-eea7bc3e73e0"
+            },
+            "touch-controller" : {
+                "uuid" : "c4cd1688-6adf-499b-b1a4-fded7369eae2"
+            },
+            "misc" : {}
+        },
+        "e2220-1170-a00-icera" : {
+            "bases" : [ "e2220-1170-a00", "&icera" ],
+            "desc" : "T210/ERS Bringup/LPDDR3/Icera Modem"
+        },
+        "e2220-1170-a00-4kdisp" : {
+            "base" : "e2220-1170-a00",
+            "desc" : "T210/ERS Bringup/LPDDR3/4K panel",
+            "disp" : {
+                "uuid" : "ed8fdddf-cf75-4d41-9059-800ed18bb60d"
+            }
+        },
+        "e2220-1170-a00-gpu-dvfs" : {
+            "desc" : "T210/ERS Bringup/LPDDR3/GPU DVFS Rework",
+            "bases" : [ "e2220-1170-a00", "&enable-gpu-dvfs" ]
+        },
+        "e2220-1170-a00-dp" : {
+            "base" : "e2220-1170-a00-gpu-dvfs",
+            "desc" : "T210/ERS Bringup/LPDDR3/DP Rework",
+            "id" : "E2220-A00-DP-REWORK",
+            "config" : "default"
+        },
+        "e2220-1180-a00" : {
+            "base": "e2220-1170-a00",
+            "desc" : "T210/ERS Char/LPDDR3",
+            "config" : "mods"
+        },
+        "e2220-1180-a00-gpu-dvfs" : {
+            "bases" : [ "e2220-1180-a00", "&enable-gpu-dvfs" ],
+            "desc" : "T210/ERS Char/LPDDR3/GPU DVFS Rework"
+        },
+        "e2220-1199-a00" : {
+            "base": "e2220-1170-a00",
+            "desc" : "T210 ERS/ERS SLT/LPDDR3",
+            "config" : "slt"
+        },
+        "e2220-1199-a00-gpu-dvfs" : {
+            "desc" : "T210 ERS/ERS SLT/LPDDR3/GPU DVFS Rework",
+            "bases" : [ "e2220-1199-a00", "&enable-gpu-dvfs" ]
+        },
+
+        "e2190-1170-a00" : {
+            "bases" : [ "&uuid", "&e1937-auo-8in-display" ],
+            "desc" : "T210/ERS Bringup/POP LPDDR4",
+            "id" : "E2190-A00",
+            "config" : "default",
+            "sn" : "",
+            "dbgport" : "0",
+            "proc" : {
+                "id"  : "2190",
+                "sku" : "1100",
+                "fab" : "0"
+            },
+            "misc" : {}
+        },
+        "e2190-1170-a00-gpu-dvfs" : {
+            "desc" : "T210/ERS Bringup/POP LPDDR4/GPU DVFS Rework",
+            "bases" : [ "e2190-1170-a00", "&enable-gpu-dvfs" ]
+        },
+        "e2190-1180-a00" : {
+            "base": "e2190-1170-a00",
+            "desc" : "T210/ERS Char/POP LPDDR3",
+            "config" : "mods"
+        },
+        "e2220-1170" : {
+            "desc" : "alias to 'e2220-1170-a00-gpu-dvfs'",
+            "base" : "e2220-1170-a00-gpu-dvfs",
+            "hide" : "true"
+        },
+        "p2371-2180" : {
+            "desc" : "Jetson-CV/AUO 19X12 dsi panel",
+            "bases" : [ "&uuid", "&e1937-auo-8in-display" ],
+            "id" : "P2371-2180",
+            "dbgport" : "0",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id"  : "2180",
+                "sku" : "1000",
+                "fab" : "0"
+            },
+            "pmu" : {
+                "id" : "2180"
+            },
+            "touch-controller" : {
+               "uuid" : "78480964-2984-4bd7-906c-09471c53b8a0"
+            },
+            "ina226": {
+                "uuid": "ae195fde-2e14-452a-8603-b28ba61c1bc9"
+            }
+        },
+        "p2371-2180-liimx185" : {
+            "desc" : "Jetson-CV/LI-MIPI-ADPT/LIIMX185",
+            "base" : "p2371-2180",
+            "id" : "P2371-2180-LIIMX185"
+        },
+        "p2371-2180-imx274" : {
+            "desc" : "Jetson-CV/Sony IMX274 camera",
+            "base" : "p2371-2180",
+            "id" : "P2371-2180-IMX274"
+        },
+        "p2371-2180-24x7" : {
+            "desc" : "Jetson-CV 24x7 Mode",
+            "base" : "p2371-2180",
+            "id" : "P2371-2180-24X7"
+        },
+        "p2371-2180-devkit" : {
+            "desc" : "Jetson-CV Devkit",
+            "base" : "p2371-2180",
+            "id" : "P2371-2180-DEVKIT",
+            "disp" : "-",
+            "touch-controller" : "-"
+        },
+        "p2371-2180-4k-edp" : {
+            "desc" : "Jetson/Bringup/Sharp 15.6\" 4k eDP panel",
+            "base" : "p2371-2180",
+            "disp" : {
+                "id" : "1824",
+                "sku" : "1000",
+                "uuid" : "ed8fdddf-cf75-4d41-9059-800ed18bb60d"
+            }
+        },
+       "p2371-2180-auo-1080-edp" : {
+            "desc" : "Jetson/Bringup/AUO\" 1080p eDP panel",
+            "base" : "p2371-2180",
+            "id" : "P2371-2180-AUO-1080-EDP",
+            "disp" : {
+                "id" : "1824",
+                "sku" : "1000",
+                "uuid" : "ed8fdddf-cf75-4d41-9059-800ed18bb60d"
+            }
+        },
+        "p2371-0000-25x16" : {
+            "desc" : "Jetson/Bringup/Sharp 25X16 dsi panel",
+            "bases" : [ "&uuid", "&enable-gpu-dvfs" ],
+            "id" : "Jetson",
+            "dbgport" : "0",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id"  : "2595",
+                "sku" : "0000",
+                "fab" : "0"
+            },
+            "pmu" : {
+                "id" : "2530"
+            },
+            "disp" : {
+                "id"  : "2145",
+                "sku" : "1000",
+                "uuid" : "7a37db2f-a49e-4f47-9077-09189423bd14"
+            },
+            "touch-controller" : {
+               "uuid" : "190901ef-4402-472c-afab-7b180504a4c9"
+            },
+            "ina226": {
+                "uuid": "ae195fde-2e14-452a-8603-b28ba61c1bc9"
+            }
+        },
+        "p2371-0000-19x12" : {
+            "desc" : "Jetson/Bringup/Auo 19x12 dsi panel",
+            "base" : "p2371-0000-25x16",
+            "touch-controller" : {
+                "uuid" : "78480964-2984-4bd7-906c-09471c53b8a0"
+            },
+            "disp" : {
+                "id"  : "2149",
+                "sku" : "1000",
+                "uuid" : "d648553e-0932-44d0-ad55-cf9f803cb2a0"
+            }
+        },
+        "abca-01-00" : {
+            "desc" : "ABCA-1/720p dsi panel",
+            "base" : "p2371-0000-19x12",
+            "id" : "ABCA-01-00",
+            "proc" : {
+                "id"  : "2811",
+                "sku" : "11",
+                "fab" : "0"
+            },
+            "disp" : {
+                "id"  : "-",
+                "sku" : "-",
+                "uuid" : "a018d7c4-d933-44eb-90f5-3ee88ab08198"
+            },
+            "touch-controller" : "-"
+        },
+        "abca-02-00" : {
+            "desc" : "ABCA-2/720p dsi panel",
+            "base" : "abca-01-00",
+            "id" : "ABCA-02-00",
+            "proc" : {
+                "sku" : "20"
+            },
+            "pmu" : {
+                "id" : "2174"
+            },
+            "disp" : {
+                "uuid" : "e311235e-59da-46b0-968d-2609cd34ef1e"
+            }
+        },
+        "abca-04-00" : {
+            "desc" : "ABCA-4/720p dsi panel",
+            "base" : "abca-02-00",
+            "id" : "ABCA-04-00",
+            "proc" : {
+                "sku" : "40"
+            }
+        },
+        "abca-04-02" : {
+            "desc" : "ABCA-4/720p dsi panel/Hynix LPDDR4",
+            "base" : "abca-04-00",
+            "id" : "ABCA-04-02",
+            "proc" : {
+                "sku" : "42"
+            }
+        },
+        "abca-05-00" : {
+            "desc" : "ABCA-5/720p dsi panel/LPDDR4 4GB",
+            "base" : "abca-04-00",
+            "id" : "ABCA-05-00",
+            "proc" : {
+                "sku" : "80"
+            }
+        },
+        "abca-05-01" : {
+            "desc" : "ABCA-5/720p dsi panel/LPDDR4 6GB",
+            "base" : "abca-05-00",
+            "id" : "ABCA-05-01",
+            "proc" : {
+                "sku" : "81"
+            }
+        },
+        "abcb-01-00" : {
+            "desc" : "ABCB-1/LPDDR4 4GB",
+            "base" : "abca-05-00",
+            "id" : "ABCB-01-00",
+            "proc" : {
+                "sku" : "90"
+            },
+            "disp" : {
+                "id" : "0",
+                "sku" : "0",
+                "fab" : "0",
+                "uuid" : "-"
+            }
+        },
+        "abca-b01-01-00" : {
+            "desc" : "T210B01/ABCA-B01-1/DSI/Touch",
+            "base" : "abca-04-00",
+            "id" : "ABCA-B01-01-00",
+            "proc" : {
+                "sku" : "85"
+            },
+            "pmu" : {
+                "id"  : "2176",
+                "sku" : "310"
+            }
+        },
+        "abca-b01-01-01" : {
+            "desc" : "T210B01/ABCA-B01-1/DSI/Touch/Auto-precharge LP4X",
+            "base" : "abca-b01-01-00",
+            "id" : "ABCA-B01-01-01"
+        },
+        "abca-b01-01-10" : {
+            "desc" : "T210B01/ABCA-B01-1/DSI/Touch/PMIC-211",
+            "base" : "abca-b01-01-00",
+            "id" : "ABCA-B01-01-10",
+            "pmu" : {
+                "id"  : "2176",
+                "sku" : "211"
+            }
+        },
+        "abca-b01-01-11" : {
+            "desc" : "T210B01/ABCA-B01-1/DSI/Touch/PMIC-211/Auto-precharge LP4X",
+            "base" : "abca-b01-01-10",
+            "id" : "ABCA-B01-01-11"
+        },
+        "p2371-0000" : {
+            "desc" : "alias to 'p2371-0000-19x12'",
+            "base" : "p2371-0000-19x12",
+            "hide" : "true"
+        },
+        "#" : "############### HAWKEYE ###############",
+        "#" : "[HAWKEYE - P2290-A00]",
+        "p2290-a00" : {
+            "bases" : [ "&uuid", "&icera", "&touch-controller-raydium_T008", "&e1937-auo-8in-display" ],
+            "desc" : "T210/Hawkeye/A00/Touch-Raydium",
+            "id" : "P2290-A00",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id" : "2290",
+                "sku" : "1270",
+                "fab" : "0"
+            },
+            "pmu" : {
+                "id" : "2174",
+                "sku" : "1120"
+            }
+        },
+        "p2290-0000" : {
+            "desc" : "alias to 'p2290-a00'",
+            "base" : "p2290-a00",
+            "hide" : "true"
+        },
+        "p2290-a00-no-batt" : {
+            "bases" : [ "p2290-a00" ],
+            "desc" : "T210/Hawkeye/A00/No Battery",
+            "id" : "P2290-A00-NO-BATT",
+            "config" : "default"
+        },
+        "p2290-a00-diag" : {
+            "bases" : [ "p2290-a00" ],
+            "hide" : "true",
+            "desc" : "T210/Hawkeye/A00/Diags",
+            "config" : "diag"
+        },
+        "p2290-a00-mods" : {
+            "bases" : [ "p2290-a00" ],
+            "hide" : "true",
+            "desc" : "T210/Hawkeye/A00/MODS",
+            "config" : "mods"
+        },
+        "p2290-a00-wifi" : {
+            "bases" : [ "p2290-a00" ],
+            "desc" : "T210/Hawkeye/A00/WIFI",
+            "id" : "P2290-A00-WIFI",
+            "config" : "default",
+            "proc" : {
+                "sku" : "306"
+            },
+            "modem" : "-"
+        },
+        "p2290-a00-sharp-7in" : {
+            "bases" : [ "p2290-a00" ],
+            "hide" : "true",
+            "desc" : "T210/Hawkeye/A00 Sharp 7in 19x12 display",
+            "id" : "P2290-A00-DISP_SHARP_7",
+            "config" : "default",
+            "disp" : {
+                "id"  : "-",
+                "sku" : "-",
+                "uuid": "aa094567-b6f8-4a27-b9af-73cc46bd08e6"
+            }
+        },
+        "p2290-a00-sharp-8in" : {
+            "bases" : [ "p2290-a00-sharp-7in" ],
+            "desc" : "T210/Hawkeye/A00 Sharp 8in 19x12 display",
+            "id" : "P2290-A00-DISP_SHARP_8",
+            "config" : "default",
+            "disp" : {
+                "uuid": "ef48cabe-ecc5-4d3b-970f-5dbde0f338c1"
+            }
+        },
+        "p2290-a00-sharp" : {
+            "bases" : [ "p2290-a00", "&touch-controller-sharp" ],
+            "desc" : "T210/Hawkeye/A00/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A00-SHARP",
+            "config" : "default",
+            "disp" : {
+                "id"  : "-",
+                "sku" : "-",
+                "uuid": "ef48cabe-ecc5-4d3b-970f-5dbde0f338c1"
+            }
+        },
+        "#" : "[HAWKEYE - P2290-A01]",
+        "p2290-a01" : {
+            "bases" : [ "p2290-a00-sharp" ],
+            "desc" : "T210/Hawkeye/A01/MP/LTE+WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A01",
+            "config" : "default",
+            "proc" : {
+                "sku" : "3306",
+                "fab" : "1"
+            }
+        },
+        "p2290-a01-wifi" : {
+            "bases" : [ "p2290-a01" ],
+            "desc" : "T210/Hawkeye/A01/MP/WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A01-WIFI",
+            "proc" : {
+                "sku" : "2306"
+            },
+            "modem" : "-"
+        },
+        "p2290-a01-evt" : {
+            "bases" : [ "p2290-a01" ],
+            "desc" : "T210/Hawkeye/A01/EVT/LTE+WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A01-EVT",
+            "proc" : {
+                "sku" : "3302"
+            }
+        },
+         "p2290-evt" : {
+            "desc" : "sanity alias to p2290-a01-evt",
+            "base" : "p2290-a01-evt",
+            "config" : "gvs",
+            "hide" : "true"
+        },
+        "#" : "[HAWKEYE - P2290-A02]",
+        "p2290-a02" : {
+            "bases" : [ "p2290-a01" ],
+            "desc" : "T210/Hawkeye/A02/POR/LTE+WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A02",
+            "config" : "default",
+            "proc" : {
+                "sku" : "3303",
+                "fab" : "2"
+            }
+        },
+        "p2290-a02-wifi" : {
+            "bases" : [ "p2290-a02" ],
+            "desc" : "T210/Hawkeye/A01/MP/WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A02-WIFI",
+            "modem" : "-"
+        },
+        "#" : "[HAWKEYE - P2290-A03]",
+        "p2290-a03" : {
+            "bases" : [ "p2290-a02" ],
+            "desc" : "T210/Hawkeye/A03/DVT/LTE+WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A03",
+            "config" : "default",
+            "proc" : {
+                "sku" : "3304",
+                "fab" : "3"
+            }
+        },
+        "p2290-a03-wifi" : {
+            "bases" : [ "p2290-a03" ],
+            "desc" : "T210/Hawkeye/A03/DVT/WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A03-WIFI",
+            "modem" : "-"
+        },
+        "#" : "[HAWKEYE - P2290-A04]",
+        "p2290-a04" : {
+            "bases" : [ "p2290-a03" ],
+            "desc" : "T210/Hawkeye/A04/DVT2/LTE+WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A04",
+            "proc" : {
+                "fab" : "4"
+            }
+        },
+        "p2290-a04-wifi" : {
+            "bases" : [ "p2290-a04" ],
+            "desc" : "T210/Hawkeye/A04/DVT2/WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A04-WIFI",
+            "modem" : "-"
+        },
+        "p2290-dvt2" : {
+            "desc" : "sanity alias to p2290-a04",
+            "base" : "p2290-a04",
+            "hide" : "true"
+        },
+        "#" : "[HAWKEYE - P2290-A05]",
+        "p2290-a05" : {
+            "bases" : [ "p2290-a04" ],
+            "desc" : "T210/Hawkeye/A05/PVT/WiFi/Touch-Sharp/Sharp 8in 19x12 display",
+            "id" : "P2290-A05",
+            "proc" : {
+                "sku" : "2305",
+                "fab" : "5"
+            },
+            "modem" : "-"
+        },
+        "#" : "[HAWKEYE - E2295-A00]",
+        "e2295-a00" : {
+            "bases" : [ "p2290-a00" ],
+            "desc" : "T210/Hawkeye Form-Factor, Power-Breakout Board/A00",
+            "id" : "E2295-A00",
+            "config" : "default",
+            "proc" : {
+                "id" : "2295",
+                "sku" : "1000",
+                "fab" : "0"
+            }
+        },
+        "e2295-a00-sharp" : {
+            "bases" : [ "p2290-a00-sharp" ],
+            "desc" : "T210/Hawkeye Form-Factor, Power-Breakout Board/A00/Sharp 8in/Sharp Touch",
+            "id" : "E2295-A00-SHARP",
+            "config" : "default",
+            "proc" : {
+                "id" : "2295",
+                "sku" : "2000",
+                "fab" : "1"
+            }
+        },
+        "e2295-0000" : {
+            "desc" : "alias to 'e2295-a00' for Mobile Sanity",
+            "base" : "e2295-a00",
+            "config" : "gvs",
+            "hide" : "true"
+        },
+        "#" : "############################################",
+
+        "p2143-1170-a00" : {
+            "base": "e2220-1170-a00-gpu-dvfs",
+            "desc" : "T210/ERS Bringup/LPDDR4 MID",
+            "proc" : {
+                "id"  : "2143",
+                "sku" : "1170",
+                "fab" : "0"
+            },
+            "id" : "P2143-A00",
+            "config" : "default"
+        },
+        "p2143-1199-a00" : {
+            "base": "p2143-1170-a00",
+            "desc" : "T210/ERS SLT/LPDDR4 MID",
+            "id" : "P2143-A00",
+            "config" : "slt"
+        },
+        "p2523-0130-e00" : {
+            "base" : "&uuid",
+            "desc" : "T210/Loki_E Base(US)/LPDDR4/5inches JDI/E00",
+            "id" : "P2530-E00",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id" : "2530",
+                "sku" : "0032",
+                "fab" : "0xe0"
+            },
+            "pmu" : {
+                "id" : "2530"
+            },
+            "disp" : {
+                "id" : "2534",
+                "fab" : "2",
+                "uuid": "14905ef6-40d7-4a0a-97bb-656a5aa24b34"
+            },
+            "touch-controller" : {
+                "uuid": "c4cd1688-6adf-499b-b1a4-fded7369eae2"
+            },
+            "wifi-antenna-tuning" : {
+                "uuid" : "fbc6cf37-24e5-47cc-b367-9e25823641ab"
+            },
+            "hide" : true,
+            "cm" : "0",
+            "lbh" : "1",
+            "factory_mode" : "0",
+            "dbgport" : "0",
+            "batt_make" : "SAMSUNG",
+            "batt_count" : "2"
+        },
+        "p2523-0130-e00-gpu-dvfs" : {
+            "desc" : "T210/Loki_E Base(US)/LPDDR4/5inches JDI/E00/GPU DVFS Rework",
+            "bases" : [ "p2523-0130-e00", "&enable-gpu-dvfs" ]
+        },
+        "p2523-0130-e01" : {
+            "desc" : "T210/Loki_E Base(US)/LPDDR4/5inches JDI/E01",
+            "base" : "p2523-0130-e00-gpu-dvfs",
+            "config" : "loki_base_e01",
+            "proc" : {
+                "fab" : "0xe1"
+            }
+        },
+        "p2523-0130-e02" : {
+            "desc" : "T210/Loki_E Base(US)/LPDDR4/5inches JDI/E02",
+            "base" : "p2523-0130-e01",
+            "config" : "loki_base_e02",
+            "proc" : {
+                "fab" : "0xe2"
+            }
+        },
+        "p2523-0130-e03" : {
+            "desc" : "T210/Loki_E Base(US)/LPDDR4/5inches JDI/E03",
+            "base" : "p2523-0130-e02",
+            "proc" : {
+                "fab" : "0xe3"
+            }
+        },
+        "p2530-1031" : {
+            "desc" : "sanity alias to p2523-0130-e02/HDMI CRC",
+            "base" : "p2523-0130-e02",
+            "hide" : "true"
+        },
+        "p2523-0031-e00" : {
+            "desc" : "T210/Loki_E LTE(US)/LPDDR4/5.6inches JDI/E00",
+            "base" : "p2523-0130-e00",
+            "config" : "loki_prem_e00",
+            "proc" : {
+                "sku" : "0031"
+            },
+            "disp" : {
+                "id" : "2534",
+                "fab" : "1",
+                "uuid": "4e007826-df09-4f68-8df8-eea7bc3e73e0"
+            },
+            "batt_count" : "3"
+        },
+        "p2523-0031-e00-gpu-dvfs" : {
+            "desc" : "T210/Loki_E LTE(US)/LPDDR4/5.6inches JDI/E00/GPU DVFS Rework",
+            "bases" : [ "p2523-0130-e00-gpu-dvfs", "p2523-0031-e00"]
+        },
+        "p2523-0031-e01" : {
+            "desc" : "T210/Loki_E LTE(US)/LPDDR4/5.6inches JDI/E01",
+            "base" : "p2523-0031-e00-gpu-dvfs",
+            "config" : "loki_prem_e01",
+            "proc" : {
+                "fab" : "0xe1"
+            }
+        },
+        "p2523-0031-e02" : {
+            "desc" : "T210/Loki_E LTE(US)/LPDDR4/5.6inches JDI/E02",
+            "base" : "p2523-0031-e01",
+            "config" : "loki_prem_e02",
+            "proc" : {
+                "fab" : "0xe2"
+            }
+        },
+        "p2523-0031" : {
+            "desc" : "alias to p2523-0031-e02",
+            "base" : "p2523-0031-e02",
+            "hide" : "true"
+        },
+         "p2523-0031-e03" : {
+            "desc" : "T210/Loki_E LTE(US)/LPDDR4/5.6inches JDI/E03",
+            "base" : "p2523-0031-e02",
+            "config" : "loki_prem_e03",
+            "proc" : {
+                "fab" : "0xe3"
+            }
+        },
+        "p2523-0030-e00" : {
+            "desc" : "T210/Loki_E WIFI/LPDDR4/5.6inches JDI/E00",
+            "base" : "p2523-0031-e00",
+            "hide" : false,
+            "config" : "loki_wifi_e00",
+            "proc" : {
+                "sku" : "0030"
+            }
+        },
+        "p2523-0030-e00-gpu-dvfs" : {
+            "desc" : "T210/Loki_E WIFI/LPDDR4/5.6inches JDI/E00/GPU DFVS Rework",
+            "bases" : [ "p2523-0130-e00-gpu-dvfs", "p2523-0030-e00"]
+        },
+        "p2523-0030-e01" : {
+            "desc" : "T210/Loki_E WIFI/LPDDR4/5.6inches JDI/E01",
+            "base" : "p2523-0030-e00-gpu-dvfs",
+            "config" : "loki_wifi_e01",
+            "proc" : {
+                "fab" : "0xe1"
+            }
+        },
+        "p2523-0030-e02" : {
+            "desc" : "T210/Loki_E WIFI/LPDDR4/5.6inches JDI/E02",
+            "base" : "p2523-0030-e01",
+            "config" : "loki_wifi_e02",
+            "proc" : {
+                "fab" : "0xe2"
+            }
+        },
+        "p2523-0030-e03" : {
+            "desc" : "T210/Loki_E WIFI/LPDDR4/5.6inches JDI/E03",
+            "base" : "p2523-0030-e02",
+            "config" : "loki_wifi_e03",
+            "proc" : {
+                "fab" : "0xe3"
+            }
+        },
+        "p2523-0030-e03-qb" : {
+            "desc" : "T210/Loki_E WIFI/LPDDR4/5.6inches JDI/E03 Qual Build",
+            "base" : "p2523-0030-e03",
+            "wifi-antenna-tuning" : {
+                "uuid" : "a5f09a7e-5ea4-4cf0-909c-55ad71818aa7"
+            }
+        },
+        "p2504-0031-a00" : {
+            "desc" : "T210/Loki_E LTE FF-PB/LPDDR4/A00",
+            "base" : "p2523-0031-e00",
+            "config" : "loki_FFPB_a00",
+            "ina226": {
+                "uuid": "ae195fde-2e14-452a-8603-b28ba61c1bc9"
+            }
+        },
+        "p2504-0031-a00-gpu-dvfs" : {
+            "desc" : "T210/Loki_E LTE FF-PB/LPDDR4/A00/GPU DVFS Rework",
+            "bases" : ["p2523-0031-e00-gpu-dvfs", "p2504-0031-a00"]
+        },
+        "p2504-0031" : {
+            "desc" : "alias to p2504-0031-a01",
+            "base" : "p2504-0031-a01"
+        },
+        "p2504-0031-a01" : {
+            "desc" : "T210/Loki_E LTE FF-PB/LPDDR4/A01",
+            "base" : "p2504-0031-a00-gpu-dvfs",
+            "config" : "loki_FFPB_a01",
+            "proc" : {
+                "fab" : "0xa1"
+            }
+        },
+        "p2504-0030-a00" : {
+            "desc" : "T210/Loki_E WIFI FF-PB/LPDDR4/A00",
+            "base" : "p2523-0030-e00",
+            "config" : "loki_wifi_FFPB_a00",
+            "ina226": {
+                "uuid": "ae195fde-2e14-452a-8603-b28ba61c1bc9"
+            },
+            "hide" : false
+        },
+        "p2504-0030-a00-gpu-dvfs" : {
+            "desc" : "T210/Loki_E WIFI FF-PB/LPDDR4/A00/GPU DVFS Rework",
+            "bases" : ["p2523-0030-e00-gpu-dvfs", "p2504-0030-a00"],
+             "hide" : false
+        },
+        "p2504-0030" : {
+            "desc" : "alias to p2504-0031-a01",
+            "base" : "p2504-0030-a01",
+            "hide" : true
+        },
+        "p2504-0030-a01" : {
+            "desc" : "T210/Loki_E WIFI FF-PB/LPDDR4/A01",
+            "base" : "p2504-0030-a00-gpu-dvfs",
+            "config" : "loki_wifi_FFPB_a01",
+            "proc" : {
+                "fab" : "0xa1"
+            },
+           "hide" : false
+       },
+        "p2571-1130-e00" : {
+            "desc" : "T210/Foster_E Base/LPDDR4/E00",
+            "base" : "p2523-0130-e00",
+            "config" : "foster",
+            "proc" : {
+                "sku" : "930"
+            },
+            "disp" : {
+                "id" : "0",
+                "sku" : "0",
+                "fab" : "0",
+                "uuid" : "-"
+            },
+            "touch-controller" : "-",
+            "hide" : false,
+            "batt_make" : "",
+            "batt_count" : "0"
+        },
+        "p2571-1130-e00-gpu-dvfs" : {
+            "desc" : "T210/Foster_E Base/LPDDR4/E00/GPU DVFS Rework",
+            "bases" : ["p2523-0130-e00-gpu-dvfs", "p2571-1130-e00"]
+        },
+        "p2571-1130-e01" : {
+            "desc" : "T210/Foster_E Base/LPDDR4/E01",
+            "base" : "p2571-1130-e00-gpu-dvfs",
+            "config" : "foster_base_e01",
+            "proc" : {
+                "fab" : "0xe1"
+            }
+        },
+        "p2571-1130-e02" : {
+            "desc" : "T210/Foster_E Base/LPDDR4/E02",
+            "base" : "p2571-1130-e01",
+            "config" : "foster_base_e02",
+            "proc" : {
+                "fab" : "0xe2"
+            }
+        },
+        "p2571-1130-e03" : {
+            "desc" : "T210/Foster_E Base/LPDDR4/E03",
+            "base" : "p2571-1130-e02",
+            "proc" : {
+                "fab" : "0xe3"
+            }
+        },
+        "p2571-1130-e03-qb" : {
+            "desc" : "T210/Foster_E Base/LPDDR4/E03",
+            "base" : "p2571-1130-e02",
+            "proc" : {
+                "fab" : "0xe3"
+            },
+            "wifi-antenna-tuning" : {
+                "uuid" : "a5f09a7e-5ea4-4cf0-909c-55ad71818aa7"
+            }
+        },
+        "p2571-1130" : {
+            "desc" : "alias to p2571-1130-e01",
+            "base" : "p2571-1130-e01",
+            "hide" : "true"
+        },
+        "p2504-0931-a00" : {
+            "desc" : "T210/Foster_E Base FF-PB/LPDDR4/A00",
+            "base" : "p2571-1130-e00",
+            "config" : "foster_FFPB_a00",
+            "ina226": {
+                "uuid": "ae195fde-2e14-452a-8603-b28ba61c1bc9"
+            }
+        },
+        "p2504-0931-a00-gpu-dvfs" : {
+            "desc" : "T210/Foster_E Base FF-PB/LPDDR4/A00/GPU DVFS Rework",
+            "bases" : ["p2571-1130-e00-gpu-dvfs", "p2504-0931-a00"]
+        },
+        "p2504-0931-a01" : {
+            "desc" : "T210/Foster_E Base FF_PB/LPDDR4/A01",
+            "base" : "p2504-0931-a00-gpu-dvfs",
+            "config" : "foster_FFPB_a01",
+            "ina226": {
+                "uuid": "ae195fde-2e14-452a-8603-b28ba61c1bc9"
+            },
+            "proc" : {
+                "fab" : "0xa1"
+            }
+        },
+        "p2504-0930-a01" : {
+            "desc" : "T210/Foster_E HDD FF_PB/LPDDR4/A01",
+            "base" : "p2504-0931-a01",
+            "id" : "P2530-E00-HDD",
+            "config" : "foster_hdd_a01",
+            "proc" : {
+                "fab" : "0xa1"
+            }
+        },
+        "p2571-1030-e00" : {
+            "desc" : "T210/Foster_E Pro/HDD/LPDDR4/E00",
+            "base" : "p2571-1130-e00",
+            "id" : "P2530-E00-HDD",
+            "config" : "default",
+            "proc" : {
+                "sku" : "932"
+            }
+        },
+        "p2571-1030-e00-gpu-dvfs" : {
+            "desc" : "T210/Foster_E Pro/HDD/LPDDR4/E00/GPU DVFS Rework",
+            "bases" : ["p2571-1130-e00-gpu-dvfs", "p2571-1030-e00"]
+        },
+        "p2571-1030" : {
+            "desc" : "alias to 'p2571-1030-e01'",
+            "base" : "p2571-1030-e01",
+            "hide" : "true"
+        },
+        "p2571-1030-e01" : {
+            "desc" : "T210/Foster_E Pro/HDD/LPDDR4/E01",
+            "base" : "p2571-1030-e00-gpu-dvfs",
+            "config" : "foster_hdd_e01",
+            "proc" : {
+                "fab" : "0xe1"
+            }
+        },
+        "p2571-1030-e02" : {
+            "desc" : "T210/Foster_E Pro/HDD/RPMB/LPDDR4/E02",
+            "base" : "p2571-1030-e01",
+            "config" : "foster_hdd_e02",
+            "proc" : {
+                "fab" : "0xe2"
+            }
+        },
+        "p2571-0931-e02" : {
+            "desc" : "T210/Foster_E Pro/HDD/CPC/LPDDR4/E02",
+            "base" : "p2571-1030-e01",
+            "config" : "foster_hdd_rpmb_e02",
+            "proc" : {
+                "fab" : "0xe2",
+                "sku" : "931"
+            },
+            "hide" : "true"
+        },
+        "p2571-0931-e03" : {
+            "desc" : "T210/Foster_E Pro/HDD/CPC/LPDDR4/E03",
+            "base" : "p2571-0931-e02",
+            "proc" : {
+                "fab" : "0xe3"
+            }
+        },
+        "p2571-1030-e03" : {
+            "desc" : "T210/Foster_E Pro/HDD/RPMB/LPDDR4/E03",
+            "base" : "p2571-1030-e02",
+            "proc" : {
+                "fab" : "0xe3"
+            }
+        },
+        "p2571-1030-e03-qb" : {
+            "desc" : "T210/Foster_E Pro/HDD/LPDDR4/E03",
+            "base" : "p2571-1030-e02",
+            "proc" : {
+                "fab" : "0xe3"
+            },
+            "wifi-antenna-tuning" : {
+                "uuid" : "a5f09a7e-5ea4-4cf0-909c-55ad71818aa7"
+            }
+        },
+        "p3310-1000-a00" : {
+            "desc" : "T210-T18x Interposer Product",
+            "base" : "p2371-2180",
+            "id" : "P3310-A00",
+            "proc" : {
+                "id"  : "3310",
+                "sku" : "1000",
+                "fab" : "0"
+            },
+            "config" : "default",
+            "touch-controller" : "-"
+        },
+        "e3301-1000-a00" : {
+            "desc" : "T210-T18x Interposer SLT/Char SKU",
+            "base" : "p3310-1000-a00",
+            "id" : "E3301-A00",
+            "proc" : {
+                "id"  : "3301",
+                "sku" : "1000",
+                "fab" : "0"
+            }
+        },
+        "p2571-0933-e03" : {
+            "desc" : "T210/Foster_E Pro/HDD/CPC/LPDDR4/E03",
+            "base" : "p2571-1030-e03-qb",
+            "config" : "foster_hdd_cpc_e03",
+            "proc" : {
+                "fab" : "0xe3",
+                "sku" : "933"
+            }
+        },
+        "p2891-0030-a00" : {
+            "desc" : "T210/Proto-Darcy Pro/HDD/CPC/LPDDR4/A00",
+            "base" : "p2571-0933-e03",
+            "id" : "P2891-A00-HDD",
+            "config" : "default",
+            "proc" : {
+                "fab" : "0xa0",
+                "sku" : "030"
+            }
+        },
+        "p2891-0130-a00" : {
+            "desc" : "T210/Proto-Darcy Base/LPDDR4/A00",
+            "base" : "p2571-1130-e03",
+            "id" : "P2891-A00",
+            "config" : "default",
+            "proc" : {
+                "fab" : "0xa0",
+                "sku" : "130"
+            }
+        },
+        "p2894-0000-a00" : {
+            "bases" : ["&uuid", "&enable-gpu-dvfs"],
+            "desc" : "T210/Darcy LPDDR4/A00/A01/A02/A03",
+            "id" : "P2894-A00",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id" : "2894",
+                "sku" : "0000",
+                "fab" : "0xa0"
+            },
+            "pmu" : {
+                "id" : "2894"
+            },
+            "wifi-antenna-tuning" : {
+                "uuid" : "a5f09a7e-5ea4-4cf0-909c-55ad71818aa7"
+            },
+            "hide" : false,
+            "cm" : "0",
+            "factory_mode" : "0",
+            "dbgport" : "0"
+        },
+        "p2894-0050-a04" : {
+            "base" : "p2894-0000-a00",
+            "desc" : "T210/Darcy LPDDR4/A04/A05/A06/A07/Split-Rail",
+            "id" : "P2894-A04",
+            "proc" : {
+                "sku" : "0050",
+                "fab" : "0xa4"
+            }
+        },
+        "p2897-2500-dvt" : {
+            "desc" : "Use GVS prebuilts for 'p2894-0050-a04'",
+            "base" : "p2894-0050-a04",
+            "config" : "darcy-a04-signed",
+            "hide" : "true"
+        },
+        "p2894-0050-a08" : {
+            "base" : "p2894-0050-a04",
+            "desc" : "T210/Darcy LPDDR4/A08/AOTAG",
+            "id" : "P2894-A08",
+            "proc" : {
+                "fab" : "0xa8"
+            }
+        },
+        "p2894-0052-a08" : {
+            "base" : "p2894-0050-a08",
+            "desc" : "T210/Flynn LPDDR4/A08/AOTAG",
+            "id" : "P2894-A08-0052",
+            "proc" : {
+                "sku" : "0052"
+            }
+        },
+        "p2894-0050-a08-t210b01" : {
+            "base" : "p2894-0050-a08",
+            "desc" : "T210b01/Mariko mDarcy LPDDR4/A08/AOTAG",
+            "id" : "P2894-A08-T210B01"
+        },
+        "p2894-2551-b00-t210b01" : {
+            "base" : "p2894-0050-a08",
+            "desc" : "T210b01/Mariko mDarcy LPDDR4/B00/AOTAG/WIFI4356",
+            "id" : "P2894-B00-T210B01",
+            "proc" : {
+                "sku" : "2551",
+                "fab" : "0xb00"
+            }
+        },
+        "mdarcy" : {
+            "base" : "p2894-0050-a08-t210b01",
+            "desc" : "T210b01/Mariko mDarcy LPDDR4/A08/AOTAG/GVS",
+            "config" : "gvs",
+            "hide" : "true"
+        },
+        "p3425-0000-a00" : {
+            "bases" : ["&uuid", "&enable-gpu-dvfs"],
+            "desc" : "T210B01/Sif LPDDR4/A00",
+            "id" : "P3425-A00",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id" : "3425",
+                "sku" : "0000",
+                "fab" : "0xa0"
+            },
+            "pmu" : {
+                "id" : "3425"
+            },
+            "wifi-antenna-tuning" : {
+                "uuid" : "a5f09a7e-5ea4-4cf0-909c-55ad71818aa7"
+            },
+            "hide" : false,
+            "cm" : "0",
+            "factory_mode" : "0",
+            "dbgport" : "0"
+        },
+        "p3449-0000-a00" : {
+            "bases" : ["&uuid", "&enable-gpu-dvfs"],
+            "desc" : "T210B01/Porg LPDDR4/A00",
+            "id" : "P3449-A00",
+            "config" : "default",
+            "sn" : "",
+            "proc" : {
+                "id" : "3449",
+                "sku" : "0000",
+                "fab" : "0xa0"
+            },
+            "pmu" : {
+                "id" : "3449"
+            },
+            "wifi-antenna-tuning" : {
+                "uuid" : "a5f09a7e-5ea4-4cf0-909c-55ad71818aa7"
+            },
+            "hide" : false,
+            "cm" : "0",
+            "factory_mode" : "0",
+            "dbgport" : "0"
+        },
+        "p2897" : {
+            "desc" : "sanity alias to p2894-0000-a00",
+            "base" : "p2894-0000-a00",
+            "hide" : "true"
+        },
+        "p2571-0030-000" : {
+            "desc" : "Use GVS prebuilts  for 'p2571-1030-e03-qb'",
+            "base" : "p2571-1030-e03-qb",
+            "config" : "foster_hdd_e03_qb_gvs",
+            "hide" : "true"
+        },
+        "p2571-2500-100" : {
+            "desc" : "Use GVS prebuilts for 'p2571-1130-e03-qb'",
+            "base" : "p2571-1130-e03-qb",
+            "config" : "foster_base_e03_qb_gvs",
+            "hide" : "true"
+        },
+        "e3350-pb-t210" : {
+            "bases" : [ "&touch-controller-sharp" ],
+            "desc" : "T210 B01 PB with T210 silicon (Interposer)",
+            "id"   : "E3350-T210-A00-PB",
+            "config" : "default",
+            "proc" : {
+                "id"  : "3350",
+                "sku" : "1000",
+                "fab" : "0xA01"
+            },
+            "pmu" : {
+                "id"  : "2175",
+                "sku" : "1122",
+                "fab" : "0xA00"
+            },
+            "disp" : {
+                "id"  : "3320",
+                "sku" : "1000",
+                "fab" : "0xA01"
+            },
+            "hide" : "true"
+        },
+        "e3350-pb-t210-dp" : {
+            "desc" : "T210 B01 PB(DP rework) with T210 silicon (Interposer)",
+            "base" : "e3350-pb-t210",
+            "id"   : "E3350-T210-A00-PB-DP",
+            "hide" : "true"
+        },
+        "e3350-slt-t210" : {
+            "desc" : "T210 B01 SLT with T210 silicon (Interposer)",
+            "base" : "e3350-pb-t210",
+            "id"   : "E3350-T210-A00-SLT",
+            "proc" : {
+                "sku" : "1099"
+            },
+            "hide" : "true"
+        },
+        "e3350-slt-t210-dp" : {
+            "desc" : "T210 B01 SLT(DP rework) with T210 silicon (Interposer)",
+            "base" : "e3350-slt-t210",
+            "id"   : "E3350-T210-A00-SLT-DP",
+            "hide" : "true"
+        },
+        "e3350-a00-pb" : {
+            "bases" : [ "&touch-controller-sharp" ],
+            "desc" : "T210 B01 PB",
+            "id"   : "E3350-A00-PB",
+            "config" : "default",
+            "proc" : {
+                "id"  : "3350",
+                "sku" : "1000",
+                "fab" : "0xA02"
+            },
+            "pmu" : {
+                "id"  : "2175",
+                "sku" : "1122",
+                "fab" : "0xA01"
+            },
+            "disp" : {
+                "id"  : "3320",
+                "sku" : "1000",
+                "fab" : "0xA01"
+            }
+        },
+        "e3350-pb" : {
+            "desc"   : "Sanity alias of 'e3350-a00-pb'",
+            "base"   : "e3350-a00-pb",
+            "hide"   : "true"
+        },
+        "e3350-a00-pb-emc-fused" : {
+            "desc" : "T210 B01 PB(EMC fused)",
+            "base" : "e3350-a00-pb",
+            "id"   : "E3350-A00-PB-EMC-FUSED"
+        },
+        "e3350-a00-pb-dp" : {
+            "desc" : "T210 B01 PB(DP rework)",
+            "base" : "e3350-a00-pb",
+            "id"   : "E3350-A00-PB-DP"
+        },
+        "e3350-a00-pb-char" : {
+            "desc" : "T210 B01 PB CHAR",
+            "base" : "e3350-a00-pb",
+            "id"   : "E3350-A00-PB-CHAR"
+        },
+        "e3350-a00-pb-lp4" : {
+            "desc" : "T210 B01 PB LP4",
+            "base" : "e3350-a00-pb",
+            "id"   : "E3350-A00-PB-LP4",
+            "proc" : {
+                "sku" : "1001"
+            }
+        },
+        "e3350-pb-lp4" : {
+            "desc"   : "Sanity alias of 'e3350-a00-pb-lp4'",
+            "base"   : "e3350-a00-pb-lp4",
+            "hide"   : "true"
+        },
+        "e3350-a00-pb-lp4-qual" : {
+            "desc" : "T210 B01 PB LP4(SLT DVFS table)",
+            "base" : "e3350-a00-pb-lp4",
+            "id"   : "E3350-A00-PB-LP4-QUAL"
+        },
+        "e3350-a00-slt" : {
+            "desc" : "T210 B01 SLT",
+            "base" : "e3350-a00-pb",
+            "id"   : "E3350-A00-SLT",
+            "proc" : {
+                "sku" : "1099"
+            }
+        },
+        "e3350-slt" : {
+            "desc"   : "Sanity alias of 'e3350-a00-slt'",
+            "base"   : "e3350-a00-slt",
+            "hide"   : "true"
+        },
+        "e3350-a00-slt-emc-fused" : {
+            "desc" : "T210 B01 SLT(EMC fused)",
+            "base" : "e3350-a00-slt",
+            "id"   : "E3350-A00-SLT-EMC-FUSED"
+        },
+        "e3350-a00-slt-dp" : {
+            "desc" : "T210 B01 SLT(DP rework)",
+            "base" : "e3350-a00-slt",
+            "id"   : "E3350-A00-SLT-DP"
+        },
+        "e3350-a00-slt-char" : {
+            "desc" : "T210 B01 SLT CHAR",
+            "base" : "e3350-a00-slt",
+            "id"   : "E3350-A00-SLT-CHAR"
+        },
+        "#references" : "##################################",
+        "&uuid" : {
+            "uuid" : {
+                "use_tags" : true
+            }
+        },
+        "&icera" : {
+            "modem" : {
+                "uuid" : "26f1d5da-9f79-452d-9cae-df34a1d64aff"
+            }
+        },
+        "&enable-gpu-dvfs" : {
+            "gpu-dvfs-rework" : {
+                "uuid" : "f2c6e112-e3ec-44bb-80f7-d6738139343d"
+            }
+        },
+        "&touch-controller-raydium_T008" : {
+            "touch-controller" : {
+                "uuid" : "9f88dc30-914f-4146-a308-c10198c44544"
+            }
+        },
+        "&e1937-auo-8in-display" : {
+            "disp" : {
+                "id"  : "1937",
+                "sku" : "1000",
+                "uuid" : "d648553e-0932-44d0-ad55-cf9f803cb2a0"
+            }
+        },
+        "&touch-controller-sharp" : {
+            "touch-controller" : {
+                "uuid" : "2d2031e7-c6e6-4cec-8d00-19b43857f9e7"
+            }
+        }
+    },
+    "sw" : {
+        "." : [ "compatible", "desc" ],
+        "E2220-A00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_e2220.cfg",
+                "dtb" : "tegra210-ers-e2220-1170-a00-00.dtb",
+                "cfg_override[+]" : [ "TOS:tos" ],
+                "tos": "trusty_tos.img",
+                "odm" : "0x5009c000"
+            },
+            "mods" : {
+                "dtb" : "tegra210-ers-e2220-1180-a00-00.dtb",
+                "odm" : "0x84000"
+            },
+            "slt" : {
+                "bct" : "bct_e2220_socket_800.cfg",
+                "dtb" : "tegra210-ers-e2220-1199-a00-00.dtb",
+                "odm" : "0x84000"
+            }
+        },
+        "E2220-A00-DP-REWORK" : {
+            "bases" : [ "&t210-base"],
+            "default" : {
+                "bct" : "bct_e2220.cfg",
+                "dtb" : "tegra210-ers-e2220-1170-a00-dp-00.dtb"
+            }
+        },
+        "E2190-A00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_e2190.cfg",
+                "dtb" : "tegra210-ers-e2190-1100-a00-00.dtb"
+            }
+        },
+        "Jetson" : {
+            "bases"   : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_jetson_e.cfg",
+                "dtb" : "tegra210-jetson-e-p2595-0000-a00-00.dtb",
+                "cfg_override[+]" : [ "TOS:tos" ],
+                "tos": "trusty_tos.img",
+                "sku" : "tm670d"
+            },
+            "mods" : {
+                "odm" : "0x84000"
+            }
+        },
+        "ABCA-01-00" : {
+            "bases"   : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_abca_01_00.cfg",
+                "dtb" : "tegra210-abca-01-00.dtb",
+                "cfg_override[+]" : [ "TOS:tos" ],
+                "tos": "trusty_tos.img",
+                "odm" : "0x1094000"
+            }
+        },
+        "ABCA-02-00" : {
+            "bases"   : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_abca_02_00.cfg",
+                "dtb" : "tegra210-abca-02-00.dtb",
+                "cfg_override[+]" : [ "TOS:tos" ],
+                "tos": "trusty_tos.img",
+                "odm" : "0x1494000"
+            }
+        },
+        "ABCA-04-00" : {
+            "bases"   : [ "ABCA-02-00" ],
+            "default" : {
+                "dtb" : "tegra210-abca-04-00.dtb"
+            }
+        },
+        "ABCA-04-02" : {
+            "bases"   : [ "ABCA-04-00" ],
+            "default" : {
+                "bct" : "bct_abca_04_02.cfg",
+                "dtb" : "tegra210-abca-04-02.dtb"
+            }
+        },
+        "ABCA-05-00" : {
+            "bases"   : [ "ABCA-04-00" ],
+            "default" : {
+                "dtb" : "tegra210-abca-05-00.dtb"
+            }
+        },
+        "ABCA-05-01" : {
+            "bases"   : [ "ABCA-05-00" ],
+            "default" : {
+                "bct" : "bct_abca_05_01.cfg",
+                "dtb" : "tegra210-abca-05-01.dtb"
+            }
+        },
+        "ABCB-01-00" : {
+            "bases"   : [ "ABCA-05-00" ],
+            "default" : {
+                "odm" : "0x1094000",
+                "bct" : "bct_abcb_01_00.cfg",
+                "dtb" : "tegra210-abcb-01-00.dtb"
+            }
+        },
+        "ABCA-B01-01-00" : {
+            "bases"   : [ "&t210b01-base" ],
+            "default" : {
+                "bct" : "bct_abca_b01_01_00.cfg",
+                "dtb" : "tegra210b01-abca-01-00.dtb",
+                "odm" : "0x1494000",
+                "tos" : "trusty_tos_t210b01.img",
+                "bpmp-dtb" : "tegra210b01-bpmp-abca-01-00.dtb"
+            }
+        },
+        "ABCA-B01-01-01" : {
+            "bases"   : [ "ABCA-B01-01-00" ],
+            "default" : {
+                "bct" : "bct_abca_b01_01_01.cfg",
+                "bpmp-dtb" : "tegra210b01-bpmp-abca-01-01.dtb"
+            }
+        },
+        "ABCA-B01-01-10" : {
+            "bases"   : [ "ABCA-B01-01-00" ],
+            "default" : {
+                "dtb" : "tegra210b01-abca-01-10.dtb"
+            }
+        },
+        "ABCA-B01-01-11" : {
+            "bases"   : [ "ABCA-B01-01-10" ],
+            "default" : {
+                "bct" : "bct_abca_b01_01_01.cfg",
+                "bpmp-dtb" : "tegra210b01-bpmp-abca-01-01.dtb"
+            }
+        },
+        "P2371-2180" : {
+            "bases"   : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_p2371_2180.cfg",
+                "dtb" : "tegra210-jetson-cv-p2597-2180-a00.dtb",
+                "cfg_override[+]" : [ "TOS:tos",
+                                      "UDA:uda" ],
+                "tos": "trusty_tos.img",
+                "uda": "userdata.img"
+            }
+        },
+        "P2371-2180-LIIMX185" : {
+            "bases"   : [ "P2371-2180" ],
+            "default" : {
+                "bct" : "bct_p2371_2180.cfg",
+                "dtb" : "tegra210-jetson-cv-camera-li-mipi-adpt-a00.dtb"
+            }
+        },
+        "P2371-2180-IMX274" : {
+            "base" : "P2371-2180",
+            "default" : {
+                "dtb" : "tegra210-jetson-cv-p2597-2180-imx274-hdmi.dtb"
+            }
+        },
+        "P2371-2180-24X7" : {
+            "base" : "P2371-2180",
+            "default" : {
+                "dtb" : "tegra210-jetson-tx1-p2597-2180-a02-android-devkit-24x7.dtb"
+            }
+        },
+        "P2371-2180-DEVKIT" : {
+            "base" : "P2371-2180",
+            "default" : {
+                "dtb" : "tegra210-jetson-tx1-p2597-2180-a01-android-devkit.dtb"
+            }
+        },
+        "P2371-2180-AUO-1080-EDP" : {
+            "base" : "P2371-2180",
+            "default" : {
+                "dtb" : "tegra210-jetson-cv-p2597-2180-a00-auo-1080p-edp.dtb"
+            }
+        },
+        "P2290-A00" : {
+            "bases" : [
+                "&t210-base",
+                "&hawkeye-default-configs",
+                "&p2290-a00-hw-patch-raydium"
+            ],
+            "default" : {
+                ".desc" : "Battery. Default Image",
+                "bct" : "bct_p2290_a00.cfg",
+                "dtb" : "tegra210-hawkeye-p2290-a00-00.dtb",
+                "odm" : "0x4b4008"
+            },
+            ".battery" : {
+                "desc" : "Deprecated. Battery. Default Image",
+                "hw_override" : [ "config=default", "factory_mode=0" ]
+            }
+        },
+        "P2290-A00-WIFI" : {
+            "base" : "P2290-A00",
+            "default" : {
+                "desc" : "P2290-A00/WIFI SKU",
+                "odm" : "0x4b4000",
+                "dtb" : "tegra210-hawkeye-p2290-a00-wifi-00.dtb"
+            }
+        },
+        "P2290-A00-NO-BATT" : {
+            "base" : "P2290-A00",
+            "default" : {
+                ".desc" : "No Battery",
+                "odm" : "0xb4000"
+            }
+        },
+        "P2290-A00-SHARP" : {
+            "bases" : [ "P2290-A00", "&hawkeye-default-configs" ],
+            "compatible" : [
+                "P2290-A00-DISP_SHARP_7",
+                "P2290-A00-DISP_SHARP_8"
+            ]
+        },
+        "P2290-A01" : {
+            "base" : "P2290-A00-SHARP",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-3306-a01-00.dtb"
+            }
+        },
+        "P2290-A01-EVT" : {
+            "base" : "P2290-A01",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-3302-a01-00.dtb"
+            }
+        },
+        "P2290-A01-WIFI" : {
+            "base" : "P2290-A01",
+            "default" : {
+                "odm" : "0x4b4000",
+                "dtb" : "tegra210-hawkeye-p2290-2306-a01-00.dtb"
+            }
+        },
+        "P2290-A02" : {
+            "desc" : "Hawkeye P2290 A02 wifi+LTE FFD board (POR)",
+            "base" : "P2290-A01",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-3303-a02-00.dtb"
+            }
+        },
+        "P2290-A02-WIFI" : {
+            "desc" : "Hawkeye P2290 A02 wifi FFD board (POR)",
+            "base" : "P2290-A02",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-2303-a02-00-wifi.dtb"
+            }
+        },
+        "P2290-A03" : {
+            "desc" : "Hawkeye P2290 A03 wifi+LTE FFD board (DVT)",
+            "base" : "P2290-A02",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-3304-a03-00.dtb"
+            }
+        },
+        "P2290-A03-WIFI" : {
+            "desc" : "Hawkeye P2290 A03 wifi FFD board (DVT)",
+            "base" : "P2290-A03",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-2304-a03-00-wifi.dtb"
+            }
+        },
+        "P2290-A04" : {
+            "desc" : "Hawkeye P2290 A04(DVT2)/A05 wifi+LTE FFD board",
+            "base" : "P2290-A03",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-3304-a04-00.dtb"
+            }
+        },
+        "P2290-A04-WIFI" : {
+            "desc" : "Hawkeye P2290 A04(DVT2)/A05 wifi FFD board",
+            "base" : "P2290-A04",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-p2290-3304-a04-00-wifi.dtb"
+            }
+        },
+        "P2290-A05" : {
+            "desc" : "Hawkeye P2290 A05(PVT)/A05 WiFi FFD board",
+            "base" : "P2290-A04",
+            "default" : {
+                "odm" : "0x4b4000",
+                "dtb" : "tegra210-hawkeye-p2290-2305-a05-00-wifi.dtb"
+            }
+        },
+        "E2295-A00" : {
+            "base" : "P2290-A00",
+            "default" : {
+                "dtb" : "tegra210-hawkeye-ffpb-e2295-a00-00.dtb"
+            }
+        },
+        "E2295-A00-SHARP" : {
+            "bases" : [ "P2290-A00-SHARP" ],
+            "default" : {
+                "dtb" : "tegra210-hawkeye-ffpb-e2295-a00-00.dtb"
+            }
+        },
+        "P2143-A00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_p2143.cfg",
+                "dtb" : "tegra210-ers-p2143-1170-a00-00.dtb"
+            },
+            "slt" : {
+                "bct" : "bct_p2143_socket.cfg",
+                "dtb" : "tegra210-ers-p2143-1199-a00-00.dtb",
+                "odm" : "0x84000"
+            }
+        },
+        "P2530-E00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_p2530_e00.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0131-e00-00.dtb",
+                "odm" : "0x694000",
+                "hw_override" : [ "__nct__.exclude=wifi,bt",
+                                  "__nct__.v=0" ],
+                "_nct_tie_breakers" : {
+                    "p2571-1130-e02"    : ["2530.930.226", "fbc6cf37"],
+                    "p2571-1130-e03"    : ["2530.930.227", "fbc6cf37"],
+                    "p2571-1130-e03-qb" : ["2530.930.227", "a5f09a7e"]
+                }
+            },
+            "loki_base_e01" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0131-e01-00.dtb"
+            },
+            "loki_base_e02" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0131-e02-00.dtb"
+            },
+            "loki_prem_e00" : {
+               "dtb" : "tegra210-loki-e-p2530-0031-e00-00.dtb"
+            },
+            "loki_prem_e01" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0031-e01-00.dtb"
+            },
+            "loki_prem_e02" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0031-e02-00.dtb"
+            },
+            "loki_prem_e03" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0031-e03-00.dtb"
+            },
+            "loki_wifi_e00" : {
+                "dtb" : "tegra210-loki-e-p2530-0030-e00-00.dtb"
+            },
+            "loki_wifi_e01" : {
+                "hw_override" : [ "proc.fab=0xe1" ],
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0030-e01-00.dtb"
+            },
+            "loki_wifi_e02" : {
+                "hw_override" : [ "proc.fab=0xe2" ],
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0030-e02-00.dtb"
+            },
+            "loki_wifi_e03" : {
+                "hw_override" : [ "proc.fab=0xe3" ],
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-loki-e-p2530-0030-e03-00.dtb"
+            },
+            "foster" : {
+                "dtb" : "tegra210-foster-e-p2530-0930-e00-00.dtb",
+                "odm" : "0x294000"
+            },
+            "foster_base_e01" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-foster-e-p2530-0930-e01-00.dtb",
+                "odm" : "0x294000"
+            },
+            "foster_base_e02" : {
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-foster-e-p2530-0930-e02-00.dtb",
+                "odm" : "0x294000"
+            },
+            "foster_base_e03_qb_gvs" : {
+                "desc" : "Foster base using GVS prebuilts binaries",
+                "bct" : "bct_p2530_e01.cfg",
+                "dtb" : "tegra210-foster-e-p2530-0930-e01-00.dtb",
+                "ebt" : [ "cboot.bin", "cboot.bin.signed.foster" ],
+                "tbc" : [ "nvtboot_cpu.bin", "nvtboot_cpu.bin.signed.foster" ],
+                "nvc" : [ "nvtboot.bin", "nvtboot.bin.signed.foster" ],
+                "wb" : [ "warmboot.bin", "warmboot.bin.signed.foster" ],
+                "tos" : [ "tos.img", "tos.img.signed.foster" ],
+                "odm" : "0x294000"
+            },
+            "loki_FFPB_a00" : {
+                "bct" : "bct_e2581.cfg",
+                "dtb" : "tegra210-loki-e-e2581-0031-a00-00.dtb"
+            },
+            "loki_FFPB_a01" : {
+                "bct" : "bct_e2581_a01.cfg",
+                "dtb" : "tegra210-loki-e-e2581-0031-a01-00.dtb"
+            },
+            "loki_wifi_FFPB_a00" : {
+                "bct" : "bct_e2581.cfg",
+                "dtb" : "tegra210-loki-e-e2581-0030-a00-00.dtb"
+            },
+            "loki_wifi_FFPB_a01" : {
+                "bct" : "bct_e2581_a01.cfg",
+                "dtb" : "tegra210-loki-e-e2581-0030-a01-00.dtb"
+            },
+            "foster_FFPB_a00" : {
+                "bct" : "bct_e2581.cfg",
+                "dtb" : "tegra210-foster-e-e2581-0930-a00-00.dtb"
+            },
+            "foster_FFPB_a01" : {
+                "bct" : "bct_e2581_a01.cfg",
+                "dtb" : "tegra210-foster-e-e2581-0930-a01-00.dtb"
+            }
+        },
+        "P2530-E00-HDD" : {
+            "bases" : [ "P2530-E00" ],
+            "default" : {
+                "dtb" : "tegra210-foster-e-hdd-p2530-0932-e00-00.dtb",
+                "cfg" : "flash_t210_android_sata_fb.xml",
+                "bct" : "bct_e2530_sata.cfg",
+                "odm" : "0x294000"
+            },
+            "foster_hdd_e01" : {
+                "bct" : "bct_p2530_sata_e01.cfg",
+                "dtb" : "tegra210-foster-e-hdd-p2530-0932-e01-00.dtb"
+            },
+            "foster_hdd_e02" : {
+                "bct" : "bct_p2530_sata_e01.cfg",
+                "dtb" : "tegra210-foster-e-hdd-p2530-0932-e02-00.dtb"
+            },
+            "foster_hdd_cpc_e03" : {
+                "bct" : "bct_p2530_sata_e01.cfg",
+                "dtb" : "tegra210-foster-e-hdd-cpc-p2530-0933-e03-00.dtb"
+            },
+            "foster_hdd_e03_qb_gvs" : {
+                "desc" : "Foster Pro using GVS prebuilts binaries",
+                "bct" : "bct_p2530_sata_e01.cfg",
+                "dtb" : "tegra210-foster-e-hdd-p2530-0932-e01-00.dtb",
+                "ebt" : [ "cboot.bin", "cboot.bin.signed.foster" ],
+                "tbc" : [ "nvtboot_cpu.bin", "nvtboot_cpu.bin.signed.foster" ],
+                "nvc" : [ "nvtboot.bin", "nvtboot.bin.signed.foster" ],
+                "wb" : [ "warmboot.bin", "warmboot.bin.signed.foster" ],
+                "tos" : [ "tos.img", "tos.img.signed.foster" ],
+                "odm" : "0x294000"
+            },
+            "foster_hdd_a01" : {
+                "bct" : "bct_p2530_sata_e01.cfg",
+                "dtb" : "tegra210-foster-e-hdd-p2530-0932-e01-00.dtb"
+            },
+            "foster_hdd_rpmb_e02" : {
+                "bct" : "bct_p2530_sata_e01.cfg",
+                "dtb" : "tegra210-foster-e-hdd-rpmb-p2530-0931-e02-00.dtb"
+            }
+        },
+        "P3310-A00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "dtb" : "tegra210-t18x-interposer-p3310-1000-a00-00.dtb",
+                "bct" : "bct_p3310_a00_lp4_204.cfg"
+            }
+        },
+        "E3301-A00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "dtb" : "tegra210-t18x-interposer-e3301-1000-a00-00.dtb"
+            }
+        },
+        "P2891-A00" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "dtb" : "tegra210-proto-darcy-p2892-0130-a00-00.dtb",
+                "cfg" : "flash_t210_android_sdmmc_fb.xml",
+                "bct" : "bct_p2892.cfg",
+                "odm" : "0x294000",
+                "hw_override" : [ "__nct__.exclude=wifi,bt" ]
+             }
+        },
+        "P2891-A00-HDD" : {
+            "bases" : [ "P2891-A00" ],
+            "default" : {
+                "dtb" : "tegra210-proto-darcy-hdd-p2892-0030-a00-00.dtb",
+                "cfg" : "flash_t210_android_sata_fb.xml",
+                "bct" : "bct_p2892_sata.cfg",
+                "odm" : "0x294000"
+            }
+        },
+        "P2894-A00" : {
+            "bases" : [ "&t210-base", "&darcy-default-configs" ],
+            "default" : {
+                "dtb" : "tegra210-darcy-p2894-0000-a00-00.dtb",
+                "cfg" : "flash_t210_darcy_android_sdmmc.xml",
+                "bct" : "bct_p2894.cfg",
+                "odm" : "0x1294000",
+                "hw_override" :["gpu-dvfs-rework.uuid=f2c6e112-e3ec-44bb-80f7-d6738139343d",
+                                "__nct__.exclude=wifi,bt"]
+            }
+        },
+        "P2894-A04" : {
+            "bases" : [ "P2894-A00" ],
+            "default" : {
+                "dtb" : "tegra210-darcy-p2894-0050-a04-00.dtb"
+            },
+            "darcy-a04-signed" : {
+                "ebt" : [ "cboot.bin", "cboot.bin.signed.darcy" ],
+                "tbc" : [ "nvtboot_cpu.bin", "nvtboot_cpu.bin.signed.darcy" ],
+                "nvc" : [ "nvtboot.bin", "nvtboot.bin.signed.darcy" ],
+                "wb" : [ "warmboot.bin", "warmboot.bin.signed.darcy" ],
+                "tos" : [ "tos.img", "tos.img.signed.darcy" ],
+                "skip_mac" : [ "wifi", "bt", "eth"]
+            }
+        },
+        "P2894-A08-T210B01" : {
+            "bases" : [ "&t210b01-base", "&darcy-default-configs" ],
+            "default" : {
+                "bct" : [ "bct_p2894_t210b01.cfg", "bct_p2894_t210b01.bct" ],
+                "rcm_bct" : [ "", "bct_p2894_t210b01_rcm.bct" ],
+                "dtb" : "tegra210b01-darcy-p2894-0050-a08-00.dtb",
+                "cfg" : "flash_t210b01_darcy_android_sdmmc.xml",
+                "bpmp-fw" : "bpmp_p2894_darcy_t210b01.bin",
+                "odm" : "0x1294000",
+                "skip_mac" : [ "wifi", "bt", "eth" ],
+                "hw_override" : [ "factory_mode=0",
+                                  "gpu-dvfs-rework.uuid=f2c6e112-e3ec-44bb-80f7-d6738139343d",
+                                  "__nct__.exclude=wifi,bt" ]
+            },
+            "gvs-prebuilts" : {
+                "nvc" : [ "nvtboot_t210b01.bin", "nvtboot_t210b01.bin.signed" ]
+            },
+            "diag" : {
+                "hw_override" : [ "factory_mode=1",
+                                  "gpu-dvfs-rework.uuid=f2c6e112-e3ec-44bb-80f7-d6738139343d",
+                                  "__nct__.exclude=wifi,bt" ]
+            },
+            "gvs" : {
+                "odm" : "0x1294000",
+                "rcm" : [ "nvtboot_recovery_t210b01.bin", "rcm_1_signed_t210b01.rcm.mdarcy" ],
+                "ebt" : [ "cboot.bin", "cboot_t210b01.bin.signed.mdarcy" ],
+                "tbc" : [ "nvtboot_cpu.bin", "nvtboot_cpu_t210b01.bin.signed.mdarcy" ],
+                "nvc" : [ "nvtboot_t210b01.bin", "nvtboot_t210b01_encrypt_header.bin.signed.mdarcy" ],
+                "wb" : [ "warmboot.bin", "warmboot_encrypt_t210b01.bin.signed.mdarcy" ],
+                "tos" : [ "tlk_tos_t210b01.img", "tlk_tos_t210b01.img.signed.mdarcy" ]
+            }
+        },
+        "P2894-B00-T210B01" : {
+            "bases" : [ "P2894-A08-T210B01" ],
+            "default" : {
+                "dtb" : "tegra210b01-darcy-p2894-2551-b00-00.dtb"
+            }
+        },
+
+        "E3350-T210-A00-PB" : {
+            "bases" : [ "&t210-base" ],
+            "default" : {
+                "bct" : "bct_e3350_t210.cfg",
+                "dtb" : "tegra210-t210b01-interposer-e3350-1000-a00-00-base.dtb",
+                "tos": "trusty_tos.img"
+            }
+        },
+        "E3350-T210-A00-PB-DP" : {
+            "bases" : [ "E3350-T210-A00-PB" ],
+            "default" : {
+                "dtb" : "tegra210-t210b01-interposer-e3350-1000-dp-a00-00-base.dtb"
+            }
+        },
+        "E3350-T210-A00-SLT" : {
+            "bases" : [ "E3350-T210-A00-PB" ],
+            "default" : {
+                "dtb" : "tegra210-t210b01-interposer-e3350-1099-a00-00-base.dtb"
+            }
+        },
+        "E3350-T210-A00-SLT-DP" : {
+            "bases" : [ "E3350-T210-A00-SLT" ],
+            "default" : {
+                "dtb" : "tegra210-t210b01-interposer-e3350-1099-dp-a00-00-base.dtb"
+            }
+        },
+        "E3350-A00-PB" : {
+            "bases" : [ "&t210b01-base" ],
+            "default" : {
+                "bct" : "bct_e3350.cfg",
+                "dtb" : "tegra210b01-ers-e3350-1000-a00-00-base.dtb",
+                "tos" : "trusty_tos_t210b01.img",
+                "bpmp-dtb" : "tegra210b01-bpmp-pb-e3350-1000-a01-00.dtb"
+            }
+        },
+        "E3350-A00-PB-EMC-FUSED" : {
+            "bases" : [ "E3350-A00-PB" ],
+            "default" : {
+                "bct" : "bct_e3350_fused.cfg",
+                "bpmp-dtb" : "tegra210b01-bpmp-pb-e3350-1000-a01-00-fused.dtb"
+            }
+        },
+        "E3350-A00-PB-DP" : {
+            "bases" : [ "E3350-A00-PB" ],
+            "default" : {
+                "dtb" : "tegra210b01-ers-e3350-1000-dp-a00-00-base.dtb"
+            }
+        },
+        "E3350-A00-PB-CHAR" : {
+            "bases" : [ "E3350-A00-PB" ],
+            "default" : {
+                "dtb" : "tegra210b01-ers-e3350-1000-char-a00-00-base.dtb"
+            }
+        },
+        "E3350-A00-PB-LP4" : {
+            "bases" : [ "E3350-A00-PB" ],
+            "default" : {
+                "bct" : "bct_e3350_lp4.cfg",
+                "bpmp-dtb" : "tegra210b01-bpmp-pb-e3350-1001-a01-00.dtb"
+            }
+        },
+        "E3350-A00-PB-LP4-QUAL" : {
+            "bases" : [ "E3350-A00-PB-LP4" ],
+            "default" : {
+                "dtb" : "tegra210b01-ers-e3350-1000-qual-a00-00-base.dtb"
+            }
+        },
+        "E3350-A00-SLT" : {
+            "bases" : [ "E3350-A00-PB" ],
+            "default" : {
+                "dtb" : "tegra210b01-ers-e3350-1099-a00-00-base.dtb",
+                "bpmp-dtb" : "tegra210b01-bpmp-slt-e3350-1099-a01-00.dtb",
+                "odm" : "0x8094000"
+            }
+        },
+        "E3350-A00-SLT-EMC-FUSED" : {
+            "bases" : [ "E3350-A00-SLT" ],
+            "default" : {
+                "bct" : "bct_e3350_fused.cfg",
+                "bpmp-dtb" : "tegra210b01-bpmp-slt-e3350-1099-a01-00-fused.dtb"
+            }
+        },
+        "E3350-A00-SLT-DP" : {
+            "bases" : [ "E3350-A00-SLT" ],
+            "default" : {
+                "dtb" : "tegra210b01-ers-e3350-1099-dp-a00-00-base.dtb"
+            }
+        },
+        "E3350-A00-SLT-CHAR" : {
+            "bases" : [ "E3350-A00-SLT" ],
+            "default" : {
+                "dtb" : "tegra210b01-ers-e3350-1099-char-a00-00-base.dtb"
+            }
+        },
+        "P2894-A08" : {
+            "bases" : [ "P2894-A04" ],
+            "default" : {
+                "dtb" : "tegra210-darcy-p2894-0050-a08-00.dtb"
+             }
+        },
+        "P2894-A08-0052" : {
+            "bases" : [ "P2894-A08" ],
+            "default" : {
+                "dtb" : "tegra210-darcy-p2894-0052-a08-00.dtb"
+             }
+        },
+        "P3425-A00" : {
+            "bases" : [ "&t210b01-base", "&darcy-default-configs" ],
+            "default" : {
+                "odm" : "0x1294000",
+                "bct" : [ "bct_p3425.cfg", "bct_p3425.bct" ],
+                "rcm_bct" : [ "", "bct_p3425_rcm.bct" ],
+                "dtb" : "tegra210b01-sif-p3425-0000-a00.dtb",
+                "bpmp-fw" : "bpmp_p3425_sif_t210b01.bin",
+                "cfg" : "flash_t210b01_sif_android_sdmmc.xml",
+                "hw_override" : [ "factory_mode=0",
+                                  "gpu-dvfs-rework.uuid=f2c6e112-e3ec-44bb-80f7-d6738139343d" ]
+            },
+            "diag" : {
+                "hw_override" : [ "factory_mode=1" ]
+            }
+        },
+        "P3449-A00" : {
+            "bases" : [ "&t210b01-base", "&darcy-default-configs" ],
+            "default" : {
+                "odm" : "0x1294000",
+                "bct" : [ "bct_p3425.cfg", "bct_p3425.bct" ],
+                "rcm_bct" : [ "", "bct_p3425_rcm.bct" ],
+                "dtb" : "tegra210b01-sif-p3425-0000-a00.dtb",
+                "bpmp-fw" : "bpmp_p3425_sif_t210b01.bin",
+                "cfg" : "flash_t210b01_sif_android_sdmmc.xml",
+                "hw_override" : [ "factory_mode=0",
+                                  "gpu-dvfs-rework.uuid=f2c6e112-e3ec-44bb-80f7-d6738139343d" ]
+            },
+            "diag" : {
+                "hw_override" : [ "factory_mode=1" ]
+            }
+        },
+        "#references" : "############################################",
+        "&t210-base" : {
+            "bases" : [ "&flash-alt-methods", "&odmtable-t210", "&t210-partition-table-default-configs" ],
+            "default" : {
+                "vars" : {
+                    "_mode" :  [ "ebt", "wb", "tbc", "tos", "nvc" ]
+                },
+                "odm" : "0x94000",
+                "cfg" : "flash_t210_android_sdmmc_fb.xml",
+                "bct" : "bct_cboot.cfg",
+                "sku" : "acr-production",
+                "lnx" : "boot.img",
+                "#" : "chip should be sourced from 'settings.flash' not from the target.",
+                "chip" : "0x21"
+            }
+        },
+        "&t210b01-base" : {
+            "bases" : [ "&t210-base", "&t210b01-partition-table-default-configs" ],
+            "default" : {
+                "vars" : {
+                    "_mode[+]" :  [ "rcm_bct", "bct" ]
+                },
+                "cfg" : "flash_t210b01_android_sdmmc_fb.xml",
+                "sku" : "b01-acr-production",
+                "chip" : "-",
+                "bpmp-fw" : "bpmp_t210b01.bin"
+            }
+        },
+        "&t210-partition-table-default-configs" : {
+            "default" : {
+                "ebt" : [ "cboot.bin", "cboot.bin.signed" ],
+                "tbc" : [ "nvtboot_cpu.bin", "nvtboot_cpu.bin.signed" ],
+                "nvc" : [ "nvtboot.bin", "nvtboot.bin.signed" ],
+                "wb" : [ "warmboot.bin", "warmboot.bin.signed" ],
+                "tos" : [ "tos.img", "tos.img.signed" ],
+                "cfg_override" : [  "DTB:dtb",
+                                    "RP1:dtb",
+                                    "UDA:uda",
+                                    "WB0:wb",
+                                    "RBL:ebt",
+                                    "EBT:ebt",
+                                    "TBC:tbc",
+                                    "TBC-B:tbc",
+                                    "NVC:nvc",
+                                    "NVC-B:nvc",
+                                    "TOS:tos" ]
+            }
+        },
+        "&t210b01-partition-table-default-configs" : {
+            "default" : {
+                "ebt" : [ "cboot.bin", "cboot_t210b01.bin.signed" ],
+                "tbc" : [ "nvtboot_cpu.bin", "nvtboot_cpu_t210b01.bin.signed" ],
+                "nvc" : [ "nvtboot_t210b01.bin", "nvtboot_t210b01_encrypt_header.bin.signed" ],
+                "wb" : [ "warmboot.bin", "warmboot_encrypt_t210b01.bin.signed" ],
+                "tos" : [ "tlk_tos_t210b01.img", "tlk_tos_t210b01.img.signed" ],
+                "cfg_override[+]" : [ "BPF:bpmp-fw" ]
+            }
+        },
+        "&hawkeye-default-configs" : {
+            "default" : {
+                "uda" : "userdata32.img",
+                "hw_override" : [ "factory_mode=0" ],
+                "alt_methods" : [ "kernel", "kernel-uda" ]
+            },
+            "diag" : {
+                "desc" : "Diags",
+                "lnx" : "factory_ramdisk.img",
+                "uda" : "userdata.img",
+                "cfg_override[+]" : [ "LNX:lnx" ],
+                "hw_override" : [ "factory_mode=1" ]
+            },
+            "mods" : {
+                "desc" : "MODS",
+                "lnx" : "factory_ramdisk.img",
+                "uda" : "userdata.img",
+                "cfg_override[+]" : [ "LNX:lnx" ],
+                "hw_override" : [ "factory_mode=2" ]
+            },
+            "gvs" : {
+                "desc" : "Skip flashing UDA to save time for sanity test",
+                "cfg_override" : [ "DTB:dtb",
+                                   "RP1:dtb",
+                                   "WB0:wb",
+                                   "RBL:ebt",
+                                   "EBT:ebt",
+                                   "TBC:tbc",
+                                   "TBC-B:tbc",
+                                   "NVC:nvc",
+                                   "NVC-B:nvc",
+                                   "TOS:tos" ],
+                "skip_sanitize" : "true"
+            }
+        },
+        "&flash-alt-methods" : {
+            "default" : {
+                "##" : "Supported alternate methods (default)",
+                "alt_methods" : [ "kernel", "pt_secureos" ],
+                "##" : "Supported method descriptions",
+                "alt_methods_descs" : {
+                    "kernel" :
+                      "Update Kernel/DTB",
+                    "kernel-uda" :
+                      "Update Kernel/DTB and Userdata",
+                    "quick-switch-to-Diag" :
+                      "Support quick switch from MP to Diag",
+                    "quick-switch-to-MP" :
+                      "Support quick switch from Diag to MP",
+                    "pt_secureos" : "Update Secure OS Partition",
+                    "secure_files_update" : "Update signed files"
+                },
+                "kernel" : {
+                    "update_partitions" : [ "LNX:lnx", "DTB:dtb", "RP1:dtb" ]
+                },
+                "##" : "kernel-uda needs to be enabled explicitly",
+                "kernel-uda" : {
+                    "update_partitions" : [ "LNX:lnx", "DTB:dtb", "RP1:dtb", "UDA:uda" ]
+                },
+                "quick-switch-to-MP" : {
+                    "update_partitions" : [ "LNX:lnx" ],
+                    "erase_partitions" : [ "UDA:uda" ]
+                },
+                "quick-switch-to-Diag" : {
+                    "update_partitions" : [ "LNX:lnx", "UDA:uda" ]
+                },
+                "pt_secureos" : {
+                    "update_partitions" : [ "TOS:tos" ]
+                },
+                "secure_files_update" : {
+                    "update_partitions" : [ "BCT:bct",
+                                            "WB0:wb",
+                                            "RBL:ebt",
+                                            "EBT:ebt",
+                                            "TBC:tbc",
+                                            "TBC-B:tbc",
+                                            "NVC:nvc",
+                                            "NVC-B:nvc",
+                                            "TOS:tos",
+                                            "EKS:default_eks" ]
+                }
+            }
+        },
+        "&p2290-a00-hw-patch-raydium" : {
+            "#" : "SW defined this UUID after initial HW definition. We need to fix it here",
+            "default" : {
+                "hw_override" : [
+                    "factory_mode=0",
+                    "touch-controller.uuid=9f88dc30-914f-4146-a308-c10198c44544"
+                 ]
+            },
+            "diag" : {
+                "hw_override" : [
+                    "factory_mode=1",
+                    "touch-controller.uuid=9f88dc30-914f-4146-a308-c10198c44544"
+                 ]
+            },
+            "mods" : {
+                "hw_override" : [
+                    "factory_mode=2",
+                    "touch-controller.uuid=9f88dc30-914f-4146-a308-c10198c44544"
+                 ]
+            }
+        },
+        "&darcy-default-configs" : {
+            "default" : {
+                "hw_override" : [ "factory_mode=0" ],
+                "alt_methods" : [ "kernel", "quick-switch-to-MP" ]
+            },
+            "diag" : {
+                "desc" : "Diags",
+                "lnx" : "factory_ramdisk.img",
+                "uda" : "userdata.img",
+                "default_eks" : "eks.dat",
+                "alt_methods" : [ "kernel", "quick-switch-to-Diag", "secure_files_update" ],
+                "cfg_override[+]" : [ "LNX:lnx" ],
+                "hw_override" : [ "factory_mode=1",
+                                  "__nct__.exclude=wifi,bt" ]
+            },
+            "gvs" : {
+                "vars" : {
+                    "_mode[+]" : [ "rcm" ]
+                }
+            },
+            "mods" : {
+                "desc" : "MODS",
+                "lnx" : "factory_ramdisk.img",
+                "uda" : "userdata.img",
+                "alt_methods" : [ "kernel", "quick-switch-to-Diag" ],
+                "cfg_override[+]" : [ "LNX:lnx" ],
+                "hw_override" : [ "factory_mode=2",
+                                  "__nct__.exclude=wifi,bt" ]
+            }
+        },
+        "#" : "############# ODM DATA TABLE #############",
+        "&odmtable-t210" : {
+            "default" : {
+                "odmtable" : {
+                    "os" : {
+                        "bit" : "0:0",
+                        "val" : {
+                            "android" : "0",
+                            "mods"    : "1"
+                        }
+                    },
+                    "offmode-charge" : {
+                        "bit" : "12:12",
+                        "val" : {
+                            "on" : "0",
+                            "off" : "1"
+                        }
+                    },
+                    "lockbl" : {
+                        "bit" : "13:13",
+                        "val" : {
+                            "unlock" : "0",
+                            "lock"  : "1"
+                        }
+                    },
+                    "skipwait" : {
+                        "bit" : "14:14",
+                        "val" : {
+                            "wait" : "0",
+                            "skip" : "1"
+                        }
+                    },
+                    "dynamic-pane" : {
+                        "bit" : "15:15",
+                        "val" : {
+                            "disable" : "0",
+                            "enable"  : "1"
+                        }
+                    },
+                    "wdt" : {
+                        "bit" : "17:16",
+                        "val" : {
+                            "disable": "0",
+                            "ap"  : "1",
+                            "pmic": "2",
+                            "all" : "3"
+                        }
+                    },
+                    "debug-console" : {
+                        "bit" : "19:18",
+                        "val" : {
+                            "none" : "0",
+                            "dcc"  : "1",
+                            "uart" : "2",
+                            "ttys" : "3"
+                        }
+                    },
+                    "dbg-carveout" : {
+                        "bit" : "20:20",
+                        "val" : {
+                            "none" : "0",
+                            "carveout" : "1"
+                        }
+                    },
+                    "pllm" : {
+                        "bit" : "21:21",
+                        "val" : {
+                            "bct" : "0",
+                            "higher" : "1"
+                        }
+                    },
+                    "power" : {
+                        "bit" : "23:22",
+                        "val" : {
+                            "adapter" : "0",
+                            "battery" : "1"
+                        }
+                    },
+                    "usb" : {
+                        "bit" : "26:24",
+                        "val" : {
+                        }
+                    },
+                    "lane-owner" : {
+                        "bit" : "30:27",
+                        "val" : {
+                            "pcie_x2_x1_usb": "0",
+                            "pcie_x4_x1" : "1",
+                            "pcie_x4_m2" : "2"
+                        }
+                    },
+                    "console-port" : {
+                        "bit" : "31:31",
+                        "val" : {
+                            "standard"  : "0",
+                            "headphone" : "1"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
