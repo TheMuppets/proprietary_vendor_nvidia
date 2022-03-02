@@ -1,0 +1,335 @@
+#!/usr/bin/python
+#
+# Copyright (c) 2014-2016, NVIDIA CORPORATION.  All rights reserved.
+#
+# NVIDIA Corporation and its licensors retain all intellectual property
+# and proprietary rights in and to this software, related documentation
+# and any modifications thereto.  Any use, reproduction, disclosure or
+# distribution of this software and related documentation without an express
+# license agreement from NVIDIA Corporation is strictly prohibited.
+#
+
+"""
+
+Generates a blob and copies into <OUT>/.
+
+Usage:
+-----
+nvblob_v2 [-c] [-t <blob_type>] [entryinfo tuples]
+
+-c : optional, choose to support blob compress
+     if choose, blob header will append original uncompressed blob size at the end
+     NOTE: do not choose for chips older than t186
+
+blob_type: update   : for OTA
+           firmware : for unified firmware partition
+           bmp      : for unified bmp partition
+
+if -t option is not there, blob-type is 'update' by default.
+
+example:
+    1) if blob-type = update then entryinfo format is: <binaryname partitionname version>
+        nvblob_v2 -t update cboot.bin EBT 2
+    2) if blob-type = firmware then entryinfo format is: <binaryname firmware-name version>
+        nvblob_v2 -t firmware NV9D.LOD SATA 0x4E563944
+    3) if blob-type = bmp then entryinfo format is: <filename bmp-type bmp-resolution>
+        nvblob_v2 -t bmp nvidia.bmp nvidia 720
+
+        currently supported bmp-types: nvidia, lowbattery, charging, charged, fullycharged
+        currently supported bmp-resolutions: 480, 720, 810, 1080, 4k, 1200_p. The 'p' of 1200_p
+        means the panel is portrait.
+
+"""
+
+import sys
+
+if sys.hexversion < 0x02060000:
+  print >> sys.stderr, "Python 2.6 or newer is required."
+  sys.exit(1)
+
+import os
+import sys
+import subprocess
+import tempfile
+import zipfile
+import struct
+import getopt
+
+source_ota = ''
+
+gpt_part_name_len_max = 36
+firmware_name_len_max = 40
+
+top_var = "TOP"
+
+def Run(args, **kwargs):
+  """Create and return a subprocess.Popen object."""
+  print "  running: ", " ".join(args)
+  return subprocess.Popen(args, **kwargs)
+
+def update_entry(t, o, l):
+    return (t[1], o, l, t[2])
+
+def firmware_entry(t, o, l):
+    return (t[1], o, l, t[2])
+
+def bmp_entry(t, o, l):
+    return (t[1], o, l, t[2], '')
+
+def update_parse(j, arg):
+    if  j == 0:
+        if (arg == ""): return arg;
+        out_path = os.environ.get("OUT")
+        if os.path.isfile(arg):
+            binary_name = arg
+        else:
+            binary_name = os.path.join(out_path, arg)
+            if not os.path.isfile(binary_name):
+                sys.stderr.write("File %s does not exist\n" % binary_name)
+                return
+        return binary_name
+    elif j == 1:
+        if len(arg) > gpt_part_name_len_max:
+            sys.stderr.write("ERROR:Partition name too long(>%s) %s\n" % (gpt_part_name_len_max,arg));
+            sys.exit(-1);
+        return arg
+    elif j == 2:
+        try:
+            return int(arg)
+        except ValueError:
+            return 0
+
+def firmware_parse(j, arg):
+    if  j == 0:
+        if (arg == ""): return arg;
+        out_path = os.environ.get("OUT")
+        if os.path.isfile(arg):
+            binary_name = arg
+        else:
+            binary_name = os.path.join(out_path, arg)
+            if not os.path.isfile(binary_name):
+                sys.stderr.write("File %s does not exist\n" % binary_name)
+                return
+        return binary_name
+    elif j == 1:
+        if len(arg) > firmware_name_len_max:
+            sys.stderr.write("ERROR:Firmware name too long(>%s) %s\n" % (firmware_name_len_max,arg));
+            sys.exit(-1);
+        return arg
+    elif j == 2:
+        try:
+            return int(arg, 0)
+        except ValueError:
+            return 0
+
+def bmp_parse(j, arg):
+    if  j == 0:
+        if (arg == ""): return arg;
+        out_path = os.environ.get("OUT")
+        if os.path.isfile(arg):
+            binary_name = arg
+        else:
+            binary_name = os.path.join(out_path, arg)
+            if not os.path.isfile(binary_name):
+                sys.stderr.write("File %s does not exist\n" % binary_name)
+                return
+        return binary_name
+    elif j == 1:
+        if   arg == 'nvidia'       : tp = 0;
+        elif arg == 'lowbattery'   : tp = 1;
+        elif arg == 'charging'     : tp = 2;
+        elif arg == 'charged'      : tp = 3;
+        elif arg == 'fullycharged' : tp = 4;
+        elif arg == 'sata_fw_ota'  : tp = 5;
+        elif arg == 'verity_yellow_pause'    : tp = 6;
+        elif arg == 'verity_yellow_continue' : tp = 7;
+        elif arg == 'verity_orange_pause'    : tp = 8;
+        elif arg == 'verity_orange_continue' : tp = 9;
+        elif arg == 'verity_red_pause'       : tp = 10;
+        elif arg == 'verity_red_continue'    : tp = 11;
+        elif arg == 'verity_red_stop'        : tp = 12;
+        else                                 : tp = 13;
+        return tp
+    elif j == 2:
+        if   arg == '480'    : res = 0;
+        elif arg == '720'    : res = 1;
+        elif arg == '810'    : res = 2;
+        elif arg == '1080'   : res = 3;
+        elif arg == '4k'     : res = 4;
+        elif arg == '1200_p' : res = 5;
+        else                 : res = 6;
+        return res
+
+def main(argv):
+
+    global top_var
+
+    # Check "TOP" variable is set and is valid
+    if not os.environ.has_key("TOP") or not os.path.isdir(os.environ["TOP"]):
+        if not os.environ.has_key("ANDROID_BUILD_TOP") or not os.path.isdir(os.environ["ANDROID_BUILD_TOP"]):
+            sys.stderr.write("Environment variable TOP not set or invalid.\n")
+            return
+        else:
+            top_var = "ANDROID_BUILD_TOP"
+
+    # Check "OUT" variable is set and is valid
+    if not os.environ.has_key("OUT") or not os.path.isdir(os.environ["OUT"]):
+        sys.stderr.write("Environment variable OUT not set or invalid.\n")
+        return
+
+    if sys.argv[1] == '-c':
+        support_compress = True
+        partition_info = sys.argv[2:]
+    else:
+        support_compress = False
+        partition_info = sys.argv[1:]
+
+    blob_formats = \
+    [
+        {'name': 'update'   , 'type': 0, 'magic': 'NVIDIA__BLOB__V2', 'entry_packing': '=40sIII' , 'params': 3 , 'fn': update_entry,   'parse': update_parse,   'outfile': 'ota.blob',      'signed_magic':'SIGNED-BY-TEGRASIGN-' },
+        {'name': 'bmp'      , 'type': 1, 'magic': 'NVIDIA__BLOB__V2', 'entry_packing': '=IIII36s', 'params': 3 , 'fn': bmp_entry,      'parse': bmp_parse,      'outfile': 'bmp.blob',      'signed_magic':'SIGNED-BY-TEGRASIGN-' },
+        {'name': 'firmware' , 'type': 2, 'magic': 'NVIDIA__BLOB__V2', 'entry_packing': '=40sIII' , 'params': 3 , 'fn': firmware_entry, 'parse': firmware_parse, 'outfile': 'firmware.blob', 'signed_magic':'SIGNED-BY-TEGRASIGN-' }
+    ]
+
+    out_path = os.environ.get("OUT")
+    print 'OUT   :', out_path
+    print 'PARTITION INFO   :', partition_info
+
+    blob_type = "update"
+    if (partition_info[0] == '-t'):
+        blob_type = partition_info[1]
+        partition_info = partition_info[2:]
+
+    for e in blob_formats:
+        if (e['name'] == blob_type):
+            break;
+
+    number_of_elements = len(partition_info)
+
+    if ((number_of_elements % e['params']) != 0):
+        print __doc__
+        return
+
+    i = 0
+    partition_info_list = []
+    while (i < number_of_elements):
+        j = 0
+        entry_info = []
+        while (j < e['params']):
+            entry_info.append(e['parse'](j, partition_info[i]));
+            j = j + 1
+            i = i + 1
+        partition_info_list.append(tuple(entry_info))
+
+    number_of_elements = len(partition_info_list)
+
+    # create a binary file for creating a dump.
+    unsigned_blob = os.path.join(out_path,e['outfile'])
+    blob = open(unsigned_blob, "wb")
+    # write fixed header into the blob
+    if support_compress == True:
+        header_packing = '=16sIIIIII';
+    else:
+        header_packing = '=16sIIIII';
+    header_size = struct.calcsize(header_packing)
+    header_size_pos = struct.calcsize('=16sI')
+    if support_compress == True:
+        update_header_tuple = (e['magic'], 0x00020000, 0, header_size, number_of_elements, e['type'], 0)
+    else:
+        update_header_tuple = (e['magic'], 0x00020000, 0, header_size, number_of_elements, e['type'])
+    update_header = struct.pack(header_packing, *update_header_tuple)
+    blob.write(update_header)
+
+    # reserve space for entries. Come back and write the actual value after populating the structures for each binary
+    empty_entry_array = []
+    j = 0
+    while (j < e['params']):
+        empty_entry_array.append(e['parse'](j, ""));
+        j = j + 1
+    empty_entry_tuple = e['fn'](tuple(empty_entry_array), 0, 0)
+    empty_entry = struct.pack(e['entry_packing'], *empty_entry_tuple)
+    for i in range(0, number_of_elements):
+        blob.write(empty_entry)
+
+    # write each binary and populate the structure for each binary
+    unique_files = {}
+    entry_list = []
+    for i in range(0, number_of_elements):
+        entry_tuple = ()
+        if (partition_info_list[i][0] in unique_files):
+            (current_pos, length) = unique_files[partition_info_list[i][0]]
+            entry_tuple = e['fn'](partition_info_list[i], current_pos, length)
+            entry_list.append(entry_tuple)
+            continue
+        current_pos = blob.tell()
+        bin_file = partition_info_list[i][0]
+        binary_handle = open(bin_file, 'rb')
+        binary_handle.seek(0, os.SEEK_END)
+        length = binary_handle.tell()
+        entry_tuple = e['fn'](partition_info_list[i], current_pos, length)
+        entry_list.append(entry_tuple)
+        binary_handle.seek(0, os.SEEK_SET)
+        blob.write(binary_handle.read())
+        binary_handle.close()
+        unique_files[partition_info_list[i][0]] = (current_pos, length)
+
+    current_pos = blob.tell();
+    blob.seek(header_size_pos, os.SEEK_SET)
+    blobsize = struct.pack('=I', current_pos)
+    blob.write(blobsize)
+    if support_compress == True:
+        uncomp_size_pos = struct.calcsize('=16sIIIII')
+        blob.seek(uncomp_size_pos, os.SEEK_SET)
+        blob.write(blobsize)
+
+    # now we have populated the structures. write at appropriate location
+    blob.seek(header_size, os.SEEK_SET)
+    for i in range(0, number_of_elements):
+        entry = struct.pack(e['entry_packing'], *entry_list[i])
+        blob.write(entry)
+
+    blob.close()
+"""
+    app_path = os.environ.get(top_var)
+    app_path = os.path.join(app_path,"out/host/linux-x86/bin/nvsignblob")
+    if os.path.exists(app_path):
+        pass
+    else:
+        print "nvblob failed. Cause : nvsignblob application not found."
+        return;
+    key_path = os.environ.get(top_var)
+    key_path = os.path.join(key_path,"device/nvidia/common/security/signkey.pk8")
+    if os.path.exists(key_path):
+        pass
+    else:
+        print "nvblob failed. Cause : signkey.pk8 file not found."
+        return;
+    out_path = os.path.join(out_path,"blob")
+    try:
+        p = Run([app_path,key_path,unsigned_blob,out_path]);
+    except OSError:
+        print "OSError : nvblob failed";
+        return;
+    else:
+        p.communicate();
+        if p.returncode != 0:
+            print "nvblob failed";
+            return;
+
+    try:
+        p = Run(["rm", unsigned_blob]);
+    except OSError:
+        print "OSError : nvblob failed";
+        return;
+    else:
+        p.communicate();
+        if p.returncode != 0:
+            print "nvblob failed";
+            return;
+        else:
+            print "done."
+"""
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
+    sys.exit(0)
