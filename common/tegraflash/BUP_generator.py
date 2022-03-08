@@ -75,7 +75,7 @@ bup_magic = "NVIDIA__BLOB__V2"
 bup_bcd_ver_maj = 0x2
 bup_bcd_ver_min = 0x1
 # bcdBUP release version (binary coded decimal number):
-# Bump it in yymm when BUP released.
+# Bump it in yymm when BUP is changed in the new release.
 # Use 2106 for the initial release with yymm in version format.
 bup_bcd_ver_yy = 0x21
 bup_bcd_ver_mm = 0x6
