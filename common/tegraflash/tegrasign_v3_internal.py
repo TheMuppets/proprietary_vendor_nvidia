@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2020, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2021, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -7,18 +7,32 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA Corporation is strictly prohibited.
 #
-from tegrasign_v3_util import isPython3, write_file
-import binascii
+import stat
+import shutil
 from xml.etree import ElementTree
 from tegrasign_v3_util import *
-import os
 
-def is_hsm():
-
-    if os.getenv('NV_ENABLE_HSM'):
-        return bool(int(os.getenv('NV_ENABLE_HSM')))
+def compute_sha(type, filename, offset, length):
+    if type == 'sha256':
+        return do_sha((256/8), filename, offset, length)
     else:
-        return False
+        return do_sha((512/8), filename, offset, length)
+
+'''
+Perform based on the node define
+<sha digest_type="sha512" digest_file="br_bct_BR.sha" offset="68" length="4028" />
+'''
+def perform_sha(filename, shanode):
+    if (shanode == None):
+        return
+    sha_type = shanode.get('digest_type')
+    dest_file = shanode.get('digest_file')
+    length = int (shanode.get('length') if shanode.get('length') else 0)
+    offset = int (shanode.get('offset') if shanode.get('offset') else 0)
+
+    compute_sha(sha_type, filename, offset, length)
+    if not os.path.isfile(dest_file):
+        raise tegrasign_exception('Could not find ' + dest_file)
 
 '''
 This parses the xml to sign list of specified files
@@ -30,12 +44,12 @@ Example xml file format
     <eddsa signature="rcm_0.sig" signed_file="rcm_0_signed.rcm" ></eddsa>
 </file>
 '''
-def sign_files_internal(p_keylist, filenode, pkh, mont):
+def sign_files_internal(p_keylist, filenode, pkh, mont, sha_type, iv):
 
     filename = filenode.get('name')
     if filename == None:
         info_print('***Missing file name*** ')
-        exit_routine()
+        return exit_routine()
 
     sign_fh = open_file(filename, 'rb')
     buff_data = sign_fh.read()
@@ -54,15 +68,15 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
     if file_size < offset:
       length = 0
       info_print('Warning: Offset %d is more than file Size %d for %s' % (offset, file_size, filename))
-      exit_routine()
+      return exit_routine()
 
     if (offset + length) > file_size:
       info_print('Warning: Offset %d + Length %d is greater than file Size %d for %s' % (offset, length, file_size, filename))
-      exit_routine()
+      return exit_routine()
 
     if key_index >= MAX_KEY_LIST:
         info_print('Warning: Key at index %d is not provided ' %(key_index))
-        exit_routine()
+        return exit_routine()
 
     buff_to_sign = buff_data[offset : offset + length]
 
@@ -71,7 +85,7 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
         sbknode = filenode.find('sbk')
         if sbknode is None:
             info_print('sbk tag is not present.')
-            exit_routine()
+            return exit_routine()
 
         skip_enc = 0 if int(sbknode.get('encrypt')) >=1 else 1
         do_sign  = 1 if int(sbknode.get('sign')) >=1 else 0
@@ -84,10 +98,10 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
         buff_hash = '0' * AES_128_HASH_BLOCK_LEN
         buff_enc = bytearray(buff_to_sign)
 
-        if skip_enc or is_zero_aes(p_keylist[key_index]):
+        if (skip_enc or is_zero_aes(p_keylist[key_index])):
             info_print('Skipping encryption: ' + filename, True)
         else:
-            buff_enc = do_aes_cbc(buff_to_sign, length, p_keylist[key_index])
+            buff_enc = do_aes_cbc(buff_to_sign, length, p_keylist[key_index], iv)
 
         if do_sign:
             buff_hash = do_aes_cmac(buff_enc, length, p_keylist[key_index])
@@ -104,12 +118,14 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
         write_file(hash_fh, buff_hash)
         hash_fh.close()
 
+        perform_sha(filename, filenode.find('sha'))
+
     elif p_keylist[key_index].mode == NvTegraSign_FSKP:
 
         sbknode = filenode.find('sbk')
         if sbknode is None:
             info_print('sbk tag is not present.')
-            exit_routine()
+            return exit_routine()
 
         skip_enc = 0 if int(sbknode.get('encrypt')) >=1 else 1
         do_sign  = 1 if int(sbknode.get('sign')) >=1 else 0
@@ -122,10 +138,10 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
         buff_hash = "0" * AES_256_HASH_BLOCK_LEN
         buff_enc = bytearray(buff_to_sign)
 
-        if skip_enc or is_zero_aes(p_keylist[key_index]):
+        if (skip_enc or is_zero_aes(p_keylist[key_index])):
             info_print('Skipping encryption: ' + filename, True)
         else:
-            buff_enc = do_aes_cbc(buff_to_sign, length, p_keylist[key_index])
+            buff_enc = do_aes_cbc(buff_to_sign, length, p_keylist[key_index], iv)
 
         if do_sign:
             buff_hash = do_aes_cmac(buff_enc, length, p_keylist[key_index])
@@ -142,24 +158,26 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
         write_file(hash_fh, buff_hash)
         hash_fh.close()
 
+        perform_sha(filename, filenode.find('sha'))
+
     elif p_keylist[key_index].mode == NvTegraSign_ECC:
 
         ecnode = filenode.find('ec')
         if ecnode is None:
           info_print('ec tag is not present')
-          exit_routine()
+          return exit_routine()
 
         sig_file_name = ecnode.get('signature')
         signed_file_name = ecnode.get('signed_file')
 
-        sig_data = do_ecc(buff_to_sign, length, p_keylist[key_index], pkh)
+        sig_data = do_ecc(buff_to_sign, length, p_keylist[key_index], pkh, sha_type)
 
         if sig_file_name:
             sig_fh = open_file(sig_file_name, 'wb')
             write_file(sig_fh, sig_data)
             sig_fh.close()
         else:
-            info_print('Not saving Hash')
+            info_print('Not saving signature')
 
         if signed_file_name:
             signed_fh = open_file(signed_file_name, 'wb')
@@ -174,7 +192,7 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
 
         if ednode is None:
           info_print('eddsa tag is not present')
-          exit_routine()
+          return exit_routine()
 
         sig_file_name = ednode.get('signature')
         signed_file_name = ednode.get('signed_file')
@@ -186,7 +204,33 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
             write_file(sig_fh, sig_data)
             sig_fh.close()
         else:
-            info_print('Not saving Hash')
+            info_print('Not saving signature')
+
+        if signed_file_name:
+            signed_fh = open_file(signed_file_name, 'wb')
+            write_file(signed_fh, buff_data)
+            signed_fh.close()
+        else:
+            info_print('Not saving signed file')
+
+    elif p_keylist[key_index].mode == NvTegraSign_XMSS:
+        ednode = filenode.find('xmss')
+
+        if ednode is None:
+          info_print('xmss tag is not present')
+          exit_routine()
+
+        sig_file_name = ednode.get('signature')
+        signed_file_name = ednode.get('signed_file')
+
+        sig_data = do_xmss(buff_to_sign, p_keylist[key_index], pkh)
+
+        if sig_file_name:
+            sig_fh = open_file(sig_file_name, 'wb')
+            write_file(sig_fh, sig_data)
+            sig_fh.close()
+        else:
+            info_print('Not saving signature')
 
         if signed_file_name:
             signed_fh = open_file(signed_file_name, 'wb')
@@ -200,19 +244,18 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
         pkcnode = filenode.find('pkc')
         if pkcnode is None:
           info_print('pkc tag is not present')
-          exit_routine()
+          return exit_routine()
 
         sig_file_name = pkcnode.get('signature')
         signed_file_name = pkcnode.get('signed_file')
-
-        sig_data = do_rsa_pss(buff_to_sign, length, p_keylist[key_index], pkh, mont)
+        sig_data = do_rsa_pss(buff_to_sign, length, p_keylist[key_index], pkh, mont, sha_type)
 
         if sig_file_name:
             sig_fh = open_file(sig_file_name, 'wb')
             write_file(sig_fh, sig_data)
             sig_fh.close()
         else:
-            info_print('Not saving Hash')
+            info_print('Not saving signature')
 
         if signed_file_name:
             signed_fh = open_file(signed_file_name, 'wb')
@@ -220,21 +263,29 @@ def sign_files_internal(p_keylist, filenode, pkh, mont):
             signed_fh.close()
         else:
             info_print('Not saving signed file')
+    return 0
 
 
-def sign_files_in_list(p_keylist, filelistname, pkh, mont):
+def sign_files_in_list(p_keylist, internal):
+    filelistname = internal["--list"]
+    pkh = internal["--pubkeyhash"]
+    mont = internal["--getmontgomeryvalues"]
+    iv = internal["--iv"]
+    sha_type = internal["--sha"]
 
     try:
         tree = ElementTree.parse(filelistname)
 
     except IOError:
         info_print('Cannot parse %s as a XML file' %(filelistname))
-        exit_routine()
+        return exit_routine()
 
     root = tree.getroot()
 
     for child in root:
-        sign_files_internal(p_keylist, child, pkh, mont)
+        retVal = sign_files_internal(p_keylist, child, pkh, mont, sha_type, iv)
+        if retVal != 0:
+            return retVal
 
     # Add mode info
     root.set('mode', get_mode_str(p_keylist[0], False))
@@ -250,13 +301,27 @@ def sign_files_in_list(p_keylist, filelistname, pkh, mont):
     xml_fh = open_file(filelistname.replace('.xml', '_signed.xml'), 'w')
     write_file(xml_fh, xml_str)
     xml_fh.close()
+    return 0
 
 
-def sign_single_file(p_key, filename, offset, length, skip_enc, do_sign, pkh, mont):
-    sign_fh = open_file(filename, 'rb')
-    buff_data = sign_fh.read()
-    file_size = len(buff_data)
-    sign_fh.close()
+def sign_single_file(p_key, internal):
+    filename = internal["--file"]
+    offset = internal["--offset"]
+    length = internal["--length"]
+    enc_type = internal["--enc"]
+    sign_type = internal["--sign"]
+    pkh = internal["--pubkeyhash"]
+    mont = internal["--getmontgomeryvalues"]
+    iv = internal["--iv"]
+    aad = internal["--aad"]
+    tag = internal["--tag"]
+    verify = internal["--verify"]
+    sha512 = internal["--sha"]
+    verbose = internal["--verbose"]
+
+    with open(filename, 'rb') as f:
+        buff_data = bytearray(f.read())
+        file_size = len(buff_data)
 
     offset = offset if offset > 0 else 0
     length = length if length > 0 else file_size - offset
@@ -264,11 +329,11 @@ def sign_single_file(p_key, filename, offset, length, skip_enc, do_sign, pkh, mo
     if file_size < offset:
       length = 0
       info_print('Warning: Offset %d is more than file Size %d for %s' % (offset, file_size, filename))
-      exit_routine()
+      return exit_routine()
 
     if (offset + length) > file_size:
       info_print('Warning: Offset %d + Length %d is greater than file Size %d for %s' % (offset, length, file_size, filename))
-      exit_routine()
+      return exit_routine()
 
     buff_to_sign = buff_data[offset : offset + length]
 
@@ -280,12 +345,19 @@ def sign_single_file(p_key, filename, offset, length, skip_enc, do_sign, pkh, mo
         buff_hash = "0" * AES_128_HASH_BLOCK_LEN
         buff_enc = bytearray(buff_to_sign)
 
-        if skip_enc or is_zero_aes(p_key):
+        if ((enc_type == None or enc_type == 'None') or is_zero_aes(p_key)):
             info_print('Skipping encryption: ' + filename, True)
-        else:
-            buff_enc = do_aes_cbc(buff_to_sign, length, p_key)
+        elif (enc_type == 'aescbc'):
+            buff_enc = do_aes_cbc(buff_to_sign, length, p_key, iv)
+        elif (enc_type == 'aesgcm'):
+            buff_enc = do_aes_gcm(buff_to_sign, length, p_key, iv, aad, tag, verify, verbose)
+            tag_file_name = os.path.splitext(filename)[0] + '.tag'
+            with open(tag_file_name, 'wb') as f:
+                f.write(p_key.kdf.tag.get_hexbuf())
 
-        if do_sign:
+        if sign_type == 'hmacsha256':
+            buff_hash = do_hmac_sha256(buff_enc, length, p_key)
+        else:
             buff_hash = do_aes_cmac(buff_enc, length, p_key)
 
         buff_data = buff_data[0:offset] + buff_enc + buff_data[offset + length:]
@@ -310,12 +382,19 @@ def sign_single_file(p_key, filename, offset, length, skip_enc, do_sign, pkh, mo
         buff_hash = "0" * AES_256_HASH_BLOCK_LEN
         buff_enc = bytearray(buff_to_sign)
 
-        if skip_enc or is_zero_aes(p_key):
+        if ((enc_type == None or enc_type == 'None') or is_zero_aes(p_key)):
             info_print('Skipping encryption: ' + filename, True)
-        else:
-            buff_enc = do_aes_cbc(buff_to_sign, length, p_key)
+        elif (enc_type == 'aescbc'):
+            buff_enc = do_aes_cbc(buff_to_sign, length, p_key, iv)
+        elif (enc_type == 'aesgcm'):
+            buff_enc = do_aes_gcm(buff_to_sign, length, p_key, iv, aad, tag, verify, verbose)
+            tag_file_name = os.path.splitext(filename)[0] + '.tag'
+            with open(tag_file_name, 'wb') as f:
+                f.write(p_key.kdf.tag.get_hexbuf())
 
-        if do_sign:
+        if sign_type == 'hmacsha256':
+            buff_hash = do_hmac_sha256(buff_enc, length, p_key)
+        else:
             buff_hash = do_aes_cmac(buff_enc, length, p_key)
 
         buff_data = buff_data[0:offset] + buff_enc + buff_data[offset + length:]
@@ -334,7 +413,7 @@ def sign_single_file(p_key, filename, offset, length, skip_enc, do_sign, pkh, mo
 
     elif p_key.mode == NvTegraSign_ECC:
 
-        sig_data = do_ecc(buff_to_sign, length, p_key, pkh)
+        sig_data = do_ecc(buff_to_sign, length, p_key, pkh, sha512)
 
         sig_file_name = os.path.splitext(filename)[0] + '.sig'
         sig_fh = open_file(sig_file_name, 'wb')
@@ -349,72 +428,44 @@ def sign_single_file(p_key, filename, offset, length, skip_enc, do_sign, pkh, mo
         write_file(sig_fh, sig_data)
         sig_fh.close()
 
-    else:
-
-        sig_data = do_rsa_pss(buff_to_sign, length, p_key, pkh, mont)
-
+    elif p_key.mode == NvTegraSign_XMSS:
+        sig_data = do_xmss(buff_to_sign, p_key, pkh)
         sig_file_name = os.path.splitext(filename)[0] + '.sig'
         sig_fh = open_file(sig_file_name, 'wb')
         write_file(sig_fh, sig_data)
         sig_fh.close()
 
-def do_aes_cmac_hsm(buf, p_key):
-
-    tmpf_in = 'tmp_aes_cmac.in'
-    tmpf_out = 'tmp_aes_cmac.mac'
-
-    with open_file(tmpf_in, 'wb') as f:
-        write_file(f, buf)
-
-    if p_key.mode == NvTegraSign_SBK:
-        # For now, Zero SBK is assumed for AES-CMAC
-        key = '00000000000000000000000000000000'
-        cipher = 'aes-128-cbc'
     else:
-        info_print('[HSM] do_aes_cmac_hsm: read an AES key filename=%s' % p_key.filename)
-        # FIXME read AES key content
-        #       same content as what's included at p_key.key.aeskey
-        with open_file(p_key.filename, 'rb') as f:
 
-            # TODO: command HSM to perform AES CBC with a correct key
-            key_ = f.read()
-            if key_[:2] == b'0x':
-                # The key below is just concatenation of hex literals in fskp.key
-                # key format is printable 0x123456578 0x9abcdef0 ...
-                key = key_.decode().strip().replace('0x', '').replace(' ', '')
-            else:
-                # key format is in a binary sequence
-                key = binascii.hexlify(key_).decode('ascii')
+        sig_data = do_rsa_pss(buff_to_sign, length, p_key, pkh, mont, sha512)
+        sig_file_name = os.path.splitext(filename)[0] + '.sig'
+        sig_fh = open_file(sig_file_name, 'wb')
+        write_file(sig_fh, sig_data)
+        sig_fh.close()
+    return 0
+'''
+To generate and return a bytearray of random numbers for the given count length
+'''
+def random_gen(count):
+    import random
+    # generate bytearray of random numbers for the given count length
+    random_array = bytearray(count)
+    for i in range(count):
+        x = random.randint(0, 255)
+        random_array[i] = x
 
-        cipher = 'aes-256-cbc'
-
-    runcmd = 'openssl dgst -mac cmac -macopt cipher:%s -macopt hexkey:%s -binary -out %s %s' % (cipher, key, tmpf_out, tmpf_in)
-    info_print('[HSM] calling %s' % runcmd)
-    try:
-        subprocess.check_call(runcmd, shell=True)
-    except subprocess.CalledProcessError:
-        print("[HSM] ERROR: failure in running %s" % runcmd)
-        exit_routine()
-    finally:
-        os.remove(tmpf_in)
-
-    with open_file(tmpf_out, 'rb') as f:
-        cmac = f.read()
-
-    os.remove(tmpf_out)
-
-    info_print('[HSM] aes cmac is done... return')
-
-    return cmac
+    return random_array
 
 def do_aes_cmac(buff_to_sign, length, p_key):
     buff_sig = "0" * 16 # note cmac will always return 128bit
 
     if is_hsm():
+        from tegrasign_v3_hsm import do_aes_cmac_hsm
         return do_aes_cmac_hsm(buff_to_sign, p_key)
 
-    raw_name = 'aescmac_raw.bin'
-    result_name = 'aescmac_out.bin'
+    base_name =  script_dir + 'v3_cmac_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.out'
     raw_file = open_file(raw_name, 'wb')
 
     key_bytes = len(binascii.hexlify(p_key.key.aeskey))/2
@@ -426,19 +477,10 @@ def do_aes_cmac(buff_to_sign, length, p_key):
 
     # to write to file
     # order: sizes then data for: key, keysize, length, buff_to_sign, buff_sig, result_name
-
-    arr = int_2bytes(4, key_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, keysize_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, len_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sign_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sig_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, result_bytes)
-    write_file(raw_file, arr)
+    num_list = [key_bytes, keysize_bytes, len_bytes, sign_bytes, sig_bytes, result_bytes]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
 
     write_file(raw_file, p_key.key.aeskey) #aeskey already in byte array format
     arr = int_2bytes(keysize_bytes, p_key.keysize)
@@ -456,7 +498,7 @@ def do_aes_cmac(buff_to_sign, length, p_key):
     raw_file.close()
 
     command = exec_file(TegraOpenssl)
-    command.extend(['--aesCmac', raw_name])
+    command.extend(['--aescmac', raw_name])
 
     ret_str = run_command(command)
 
@@ -469,59 +511,70 @@ def do_aes_cmac(buff_to_sign, length, p_key):
     os.remove(raw_name)
     return buff_sig
 
-def do_aes_cbc_hsm(buf, p_key):
-
-    tmpf_in = 'tmp_aes_cbc.in'
-    tmpf_out = 'tmp_aes_cbc.enc'
-
-    # FIXME: replace a below std openssl aes-cbc with HSM FSKP
-    #        put the key label or slot into the name with dummy key info
-    #        e.g.) aes128_slot0_key0.key
-
-    with open_file(tmpf_in, 'wb') as f:
-        write_file(f, buf)
-
-    with open_file(p_key.filename, 'rb') as f:
-        info_print('[HSM] do_aes_cbc_hsm: AES key filename=%s' % p_key.filename)
-
-        # FIXME: command HSM to perform AES CBC with a correct key
-        #        read the same key value as what's included at p_key.key.aeskey
-        key_ = f.read()
-        if key_[:2] == b'0x':
-            # key format is printable 0x123456578 0x9abcdef0 ...
-            key = key_.decode().strip().replace('0x', '').replace(' ', '')
-        else:
-            # key format is in a binary sequence
-            key = binascii.hexlify(key_).decode('ascii')
-    # NOTE: IV = 0
-    iv  = '00000000000000000000000000000000'
-
-    runcmd = "openssl enc -e -aes-256-cbc -nopad -in %s -out %s -K %s -iv %s" % (tmpf_in, tmpf_out, key, iv)
-    info_print('[HSM] calling %s' % runcmd)
-    try:
-        subprocess.check_call(runcmd, shell=True)
-    except subprocess.CalledProcessError:
-        print("[HSM] ERROR: failure in running %s" % runcmd)
-        exit_routine()
-    finally:
-        os.remove(tmpf_in)
-
-    with open_file(tmpf_out, 'rb') as f:
-        buf_enc = f.read()
-
-    os.remove(tmpf_out)
-
-    info_print('[HSM] aes-cbc-256 is done... return')
-
-    return buf_enc
-
-def do_aes_cbc(buff_to_enc, length, p_key):
+def do_hmac_sha256(buff_to_sign, length, p_key):
+    buff_dgst = "0" * 32 # note hmac-sha256 will always return 256bit
 
     if is_hsm():
+        from tegrasign_v3_hsm import do_hmac_sha256_hsm
+        return do_hmac_sha256_hsm(buff_to_sign, p_key)
+
+    base_name = script_dir + 'v3_hmacsha_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.out'
+    raw_file = open_file(raw_name, 'wb')
+
+    key_bytes = len(binascii.hexlify(p_key.key.aeskey))/2
+    keysize_bytes = int_2byte_cnt(p_key.keysize)
+    len_bytes = int_2byte_cnt(length)
+    hash_bytes = len(buff_to_sign)
+    dgst_bytes = len(buff_dgst)
+    result_bytes = len(result_name) + 1
+
+    # to write to file
+    # order: sizes then data for: key, keysize, length, buff_to_sign, buff_dgst, result_name
+    num_list = [key_bytes, keysize_bytes, len_bytes, hash_bytes, dgst_bytes, result_bytes]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
+
+    write_file(raw_file, p_key.key.aeskey) #aeskey already in byte array format
+    arr = int_2bytes(keysize_bytes, p_key.keysize)
+    write_file(raw_file, arr)
+    arr = int_2bytes(len_bytes, length)
+    write_file(raw_file, arr)
+
+    write_file(raw_file, bytes(buff_to_sign))
+    write_file(raw_file, buff_dgst.encode("utf-8"))
+    write_file(raw_file, result_name.encode("utf-8"))
+    nullarr = bytearray(1)
+    nullarr[0] = 0          # need this null for char*
+    write_file(raw_file, nullarr)
+    raw_file.close()
+
+    command = exec_file(TegraOpenssl)
+    command.extend(['--hmacsha256', raw_name])
+
+    ret_str = run_command(command)
+
+    if check_file(result_name):
+        result_fh = open_file(result_name, 'rb')
+        buff_dgst = result_fh.read()
+        result_fh.close()
+        os.remove(result_name)
+
+    os.remove(raw_name)
+    return buff_dgst
+
+def do_aes_cbc(buff_to_enc, length, p_key, iv):
+
+    if is_hsm():
+        from tegrasign_v3_hsm import do_aes_cbc_hsm
         return do_aes_cbc_hsm(buff_to_enc, p_key)
 
-    raw_name = 'aescbc_raw.bin'
-    result_name = 'aescbc_out.bin'
+    buff_sig = "0" * 16
+    base_name = script_dir + 'v3_cbc_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.out'
     raw_file = open_file(raw_name, 'wb')
 
     key_bytes = len(binascii.hexlify(p_key.key.aeskey))/2
@@ -530,24 +583,18 @@ def do_aes_cbc(buff_to_enc, length, p_key):
     enc_bytes = len(buff_to_enc)
     dest_bytes = int(length)
     result_bytes = len(result_name) + 1
-    buff_dest = "0" * int(dest_bytes)
-    info_print (dest_bytes)
+    buff_dest = "0" * dest_bytes
+    if (type(iv) == str) or (type(iv) == bytearray):
+        iv_bytes = len(binascii.hexlify(iv))/2
+    else:
+        iv_bytes = 0;
 
     # to write to file
-    # order: sizes then data for: key, keysize, length, buff_to_enc, buff_dest, result_name
-
-    arr = int_2bytes(4, int(key_bytes))
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, keysize_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, len_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, enc_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, dest_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, result_bytes)
-    write_file(raw_file, arr)
+    # order: sizes then data for: key, keysize, length, buff_to_enc, buff_dest, result_name, iv
+    num_list = [key_bytes, keysize_bytes, len_bytes, enc_bytes, dest_bytes, result_bytes, iv_bytes]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
 
     write_file(raw_file, p_key.key.aeskey)
     arr = int_2bytes(keysize_bytes, p_key.keysize)
@@ -562,10 +609,12 @@ def do_aes_cbc(buff_to_enc, length, p_key):
     nullarr = bytearray(1)
     nullarr[0] = 0          # need this null for char*
     write_file(raw_file, nullarr)
+    if (iv != None):
+        write_file(raw_file, bytes(iv))
     raw_file.close()
 
     command = exec_file(TegraOpenssl)
-    command.extend(['--aesCbc', raw_name])
+    command.extend(['--aescbc', raw_name])
 
     ret_str = run_command(command)
 
@@ -578,79 +627,32 @@ def do_aes_cbc(buff_to_enc, length, p_key):
     os.remove(raw_name)
     return buff_sig
 
-def do_rsa_pss_hsm(buf, p_key):
-
-    tmpf_in = 'tmp_rsa_pss.in'
-    tmpf_out = 'tmp_rsa_pss.sig'
-    tmpf_hash = 'tmp_sha256.hash'
-    priv_keyf = p_key.filename
-
-    with open_file(tmpf_in, 'wb') as f:
-        write_file(f, buf)
-
-    # rsa_pss_saltlen:-1 means the same length of hash (sha256) here
-    # single line execution:
-    # runcmd = "openssl dgst -sha256 -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:-1 -sign %s -out %s %s" % (priv_keyf, tmpf_out, tmpf_in)
-
-    # two separate line execution with intermediate sha256 output
-    runcmd1 = "openssl dgst -sha256 -binary -out %s %s" % (tmpf_hash, tmpf_in)
-    runcmd2 = "openssl pkeyutl -sign -pkeyopt rsa_padding_mode:pss -pkeyopt rsa_pss_saltlen:-1 -pkeyopt digest:sha256 -in %s -out %s -inkey %s" % (tmpf_hash, tmpf_out, priv_keyf)
-    info_print('[HSM] calling %s\n%s' % (runcmd1, runcmd2))
-    try:
-        subprocess.check_call(runcmd1, shell=True)
-        subprocess.check_call(runcmd2, shell=True)
-    except subprocess.CalledProcessError:
-        print("[HSM] ERROR: failure in running %s, %s" % (runcmd1, runcmd2))
-        exit_rotune()
-    finally:
-        os.remove(tmpf_in)
-
-    with open_file(tmpf_out, 'rb') as f:
-        sig_data = swapbytes(bytearray(f.read()))
-
-    os.remove(tmpf_hash)
-    os.remove(tmpf_out)
-
-    info_print('[HSM] rsa-pss routine is done... return')
-
-    return sig_data
-
-def do_rsa_pss(buff_to_sign, length, p_key, pkhfile, montfile):
-
+def do_rsa_pss(buff_to_sign, length, p_key, pkhfile, montfile, sha512):
+    p_key.key.pkckey.Sha = sha512
     if is_hsm():
+        from tegrasign_v3_hsm import do_rsa_pss_hsm
         return do_rsa_pss_hsm(buff_to_sign, p_key)
 
     buff_sig = "0" * p_key.keysize
+    base_name =  script_dir + 'v3_rsa_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.out'
 
-    raw_name = 'rsa_raw.bin'
-    result_name = 'rsa_out.bin'
     raw_file = open_file(raw_name, 'wb')
 
     filename_bytes = len(p_key.filename) + 1 # to account for 0x0
     len_bytes = int_2byte_cnt(length)
     sign_bytes = len(buff_to_sign)
-
     sig_bytes = len(buff_sig)
     pkh_bytes = 0 if pkhfile == None else (len(pkhfile) + 1)
     mont_bytes = 0 if montfile == None else (len(montfile) + 1)
     result_bytes = len(result_name) + 1
 
-    # order: sizes then data for: file name, length, buff_to_sign, buff_sig, pkhfile, montfile, result_name
-    arr = int_2bytes(4, filename_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, len_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sign_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sig_bytes)
-    write_file(raw_file, arr)
-
-    arr = int_2bytes(4, pkh_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, mont_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, result_bytes)
-    write_file(raw_file, arr)
+    # order: sizes then data for: file name, length, buff_to_sign, buff_sig, pkhfile, montfile, result_name, sha512
+    num_list = [filename_bytes, len_bytes, sign_bytes, sig_bytes, pkh_bytes, mont_bytes, result_bytes, sha512]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
 
     write_file(raw_file, bytes(p_key.filename.encode("utf-8")))
     nullarr = bytearray(1)
@@ -690,12 +692,13 @@ def do_rsa_pss(buff_to_sign, length, p_key, pkhfile, montfile):
     os.remove(raw_name)
     return buff_sig
 
-def do_ecc(buff_to_sign, length, p_key, pkhfile):
+def do_ecc(buff_to_sign, length, p_key, pkhfile, sha512):
 
     buff_sig = "0" * p_key.keysize
 
-    raw_name = 'ecc_raw.bin'
-    result_name = 'ecc_out.bin'
+    base_name =  script_dir + 'v3_ecc_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.out'
     raw_file = open_file(raw_name, 'wb')
 
     filename_bytes = len(p_key.filename) + 1 # to account for 0x0
@@ -705,20 +708,11 @@ def do_ecc(buff_to_sign, length, p_key, pkhfile):
     pkh_bytes = 0 if pkhfile == None else (len(pkhfile) + 1)
     result_bytes = len(result_name) + 1
 
-    # order: sizes then data for: file name, length, buff_to_sign, buff_sig, pkhfile, result_name
-    arr = int_2bytes(4, filename_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, len_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sign_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sig_bytes)
-    write_file(raw_file, arr)
-
-    arr = int_2bytes(4, pkh_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, result_bytes)
-    write_file(raw_file, arr)
+    # order: sizes then data for: file name, length, buff_to_sign, buff_sig, pkhfile, result_name, sha512
+    num_list = [filename_bytes, len_bytes, sign_bytes, sig_bytes, pkh_bytes, result_bytes, sha512]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
 
     write_file(raw_file, bytes(p_key.filename.encode("utf-8")))
     nullarr = bytearray(1)
@@ -756,10 +750,15 @@ def do_ecc(buff_to_sign, length, p_key, pkhfile):
 
 def do_ed25519(buff_to_sign, length, p_key, pkhfile):
 
+    if is_hsm():
+        from tegrasign_v3_hsm import do_ed25519_hsm
+        return do_ed25519_hsm(buff_to_sign, p_key)
+
     buff_sig = "0" * p_key.keysize
 
-    raw_name = 'ed_raw.bin'
-    result_name = 'ed_out.bin'
+    base_name =  script_dir + 'v3_eddsa_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.out'
     raw_file = open_file(raw_name, 'wb')
 
     filename_bytes = len(p_key.filename) + 1 # to account for 0x0
@@ -770,19 +769,10 @@ def do_ed25519(buff_to_sign, length, p_key, pkhfile):
     result_bytes = len(result_name) + 1
 
     # order: sizes then data for: file name, length, buff_to_sign, buff_sig, pkhfile, result_name
-    arr = int_2bytes(4, filename_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, len_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sign_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, sig_bytes)
-    write_file(raw_file, arr)
-
-    arr = int_2bytes(4, pkh_bytes)
-    write_file(raw_file, arr)
-    arr = int_2bytes(4, result_bytes)
-    write_file(raw_file, arr)
+    num_list = [filename_bytes, len_bytes, sign_bytes, sig_bytes, pkh_bytes, result_bytes]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
 
     write_file(raw_file, bytes(p_key.filename.encode("utf-8")))
     nullarr = bytearray(1)
@@ -818,9 +808,69 @@ def do_ed25519(buff_to_sign, length, p_key, pkhfile):
     os.remove(raw_name)
     return buff_sig
 
-def do_sha256(fileName, offset, length):
+def do_xmss(buff_to_sign, p_key, pkh):
+    # public key file name is xmss-sha256_20.pub
+    raw_name = script_dir + 'v3_xmss_' + pid + '.raw'
+    buff_sign = None;
 
-    sha_fh = open_file(fileName, 'rb')
+    key_file = p_key.filename
+    cache_file = key_file + '.cache'
+    pub_file = os.path.splitext(os.path.basename(key_file))[0] + '.pub'
+    result_name = raw_name + '.sig'
+    xmss_exe = 'xmss-sign'
+
+    if (check_file(xmss_exe) == False):
+        raise tegrasign_exception('Can not find %s for signing' % (xmss_exe))
+
+    # If any of the three files does not exist, invoke to regenrate key pair
+    if (check_file(cache_file) == False or check_file(key_file) == False
+        or check_file(pub_file) == False):
+        info_print('Regenerating XMSS key pair')
+        if (check_file(cache_file) == True):
+            os.remove(cache_file)
+        if (check_file(key_file) == True):
+            os.remove(key_file)
+        if (check_file(pub_file) == True):
+            os.remove(pub_file)
+        # Invoke cmd to regenerate: ./xmss-sign generate --privkey private-key --pubkey public-key
+        command = exec_file(xmss_exe)
+        command.extend(['generate --privkey ' + key_file + ' --pubkey ' + pub_file]);
+        ret_str = run_command(command)
+    status = os.stat(key_file)
+    mask = oct(status.st_mode)[-3:]
+
+    if (status.st_mode & stat.S_IWOTH) or (status.st_mode & stat.S_IXOTH) or (status.st_mode & stat.S_IROTH):
+        info_print(key_file + ' file mode needs to be modified, mask: ' + mask)
+        new_mode = stat.S_IMODE(os.lstat(key_file).st_mode)
+        new_mode = new_mode & 0o770   # get rid of other mode, so resulting in: o=
+        try:
+            os.chmod(key_file, new_mode)
+            info_print('Hit exception when changing the mode: ' + oct(new_mode)[-3:] )
+        except Exception as e:
+            info_print('Hit exception when changing the mode: ' + oct(new_mode)[-3:] + str(e))
+    with open_file(raw_name, 'wb') as raw_file:
+        write_file(raw_file, bytes(buff_to_sign))
+
+    if pkh:
+        shutil.copyfile(pub_file, pkh)
+
+    # Generate the signature in file named '$raw_name'.sig
+    command = exec_file(xmss_exe)
+    command.extend(['sign'])
+    command.extend(['-f', raw_name])
+    command.extend(['--privkey', key_file])
+    command.extend(['-o', result_name])
+    ret_str = run_command(command)
+
+    if check_file(result_name):
+        with open_file(result_name, 'rb') as result_fh:
+            buff_sig = result_fh.read()
+        os.remove(result_name)
+    return buff_sig
+
+def do_sha(sha_cnt, filename, offset, length):
+
+    sha_fh = open_file(filename, 'rb')
     buff_data = sha_fh.read()
     sha_fh.close()
 
@@ -831,42 +881,38 @@ def do_sha256(fileName, offset, length):
     if file_size < offset:
       length = 0
       info_print('Warning: Offset %d is more than file Size %d for %s' % (offset, file_size, filename))
-      exit_routine()
+      return exit_routine()
 
     if (offset + length) > file_size:
       info_print('Warning: Offset %d + Length %d is greater than file Size %d for %s' % (offset, length, file_size, filename))
-      exit_routine()
+      return exit_routine()
 
     buff_to_hash = buff_data[offset : offset + length]
-    sha_cnt = (256/8)
     buff_hash = "0" * int(sha_cnt)
     len_bytes = int_2byte_cnt(length)
-    hash_file_name = os.path.splitext(fileName)[0] + '.sha'
+    base_name = script_dir + 'v3_' + os.path.splitext(os.path.basename(filename))[0] + '_' + pid
+    hash_file_name = os.path.splitext(filename)[0] + '.sha'
     hash_file_bytes = len(hash_file_name) + 1
 
     # to write to raw file
-    raw_name = 'sha_raw.bin'
+    raw_name =  base_name + '.raw'
     raw_file = open_file(raw_name, 'wb')
 
     # order: sizes then data for: length, buff_to_hash, buff_hash, hash_file_name
-    arr = int_2bytes(4, len_bytes)
-    write_file(raw_file, bytes(arr))
-    arr = int_2bytes(4, length)
-    write_file(raw_file, bytes(arr))
-    arr = int_2bytes(4, sha_cnt)
-    write_file(raw_file, bytes(arr))
-    arr = int_2bytes(4, hash_file_bytes)
-    write_file(raw_file, bytes(arr))
+    num_list = [len_bytes, length, sha_cnt, hash_file_bytes]
+    for num in num_list:
+        arr = int_2bytes(4, num)
+        write_file(raw_file, arr)
 
     arr = int_2bytes(len_bytes, length)
-    write_file(raw_file, bytes(arr))
+    write_file(raw_file, arr)
 
     write_file(raw_file, bytes(buff_to_hash))
     write_file(raw_file, bytes(buff_hash.encode("utf-8")))
     nullarr = bytearray(1)
     nullarr[0] = 0          # need this null for char*
     write_file(raw_file, bytes(hash_file_name.encode("utf-8")))
-    write_file(raw_file, bytes(nullarr))
+    write_file(raw_file, nullarr)
 
     raw_file.close()
 
@@ -878,7 +924,7 @@ def do_sha256(fileName, offset, length):
         info_print('Sha saved in ' + hash_file_name)
 
     os.remove(raw_name)
-
+    return hash_file_name
 
 def extract_AES_key(pBuffer, BufSize, p_key):
 
@@ -900,62 +946,61 @@ def extract_AES_key(pBuffer, BufSize, p_key):
             p_key.mode = NvTegraSign_FSKP
             info_print('Key Size is 32 bytes')
             return 1
+        else:
+            info_print('Not an AES key', True)
+            return 0
 
-    # Process the content as string format
-    list_of_elements = [ (number).replace("0x", "") for number in pBuffer[:].decode().replace("\n", " ").split(" ") ]
-
-    key_str = list_of_elements[0]
-
-    for element in list_of_elements[1:]:
-        key_str = key_str + element
-
-    key_str_length = len(key_str.strip())
-    if key_str_length == 32:
-        p_key.mode = NvTegraSign_SBK
-        info_print('Key is a SBK key')
-        info_print('Key Size is 16 bytes')
-
-    elif key_str_length == 64:
-        p_key.mode = NvTegraSign_FSKP
-        info_print('Key Size is 32 bytes')
-
-    else:
-        info_print('Not an AES key', True)
-        return 0
-
-    if(isPython3()):
-        key = binascii.unhexlify(key_str.strip())
-    else:
-        key = key_str.strip().decode("hex")
-
-    p_key.keysize = int(key_str_length/2)
-
-    p_key.key.aeskey = bytearray(key)
-
-    return 1
-
-def get_rsa_mod_hsm(priv_keyf, key_size, pub_modf=None):
-
-    runcmd = 'openssl rsa -in %s -modulus -noout' % (priv_keyf)
-    info_print('[HSM] calling %s' % runcmd)
     try:
-        output = subprocess.check_output(runcmd, shell=True).decode("utf-8")
-    except subprocess.CalledProcessError:
-        print("[HSM] ERROR: failure in running %s" % runcmd)
-        exit_routine()
-    # Check if the output is 'Modulus=963E...'
-    if not output.startswith('Modulus='):
-        return False
+        # Process the content as string format
+        list_of_elements = [ (number).replace("0x", "") for number in pBuffer[:].decode().replace("\n", " ").split(" ") ]
 
-    rsa_n_bin = swapbytes(bytearray(binascii.unhexlify(output.strip()[len('Modulus='):])))
-    key_size = len(rsa_n_bin)
-    if pub_modf:
-        with open_file(pub_modf, 'wb') as f:
-            write_file(f, rsa_n_bin)
+        key_str = list_of_elements[0]
 
-    info_print('[HSM] Done - get_rsa_modulus_hsm')
+        for element in list_of_elements[1:]:
+            key_str = key_str + element
 
-    return True
+        key_str_length = len(key_str.strip())
+        if key_str_length == 32:
+            p_key.mode = NvTegraSign_SBK
+            info_print('Key is a SBK key')
+            info_print('Key Size is 16 bytes')
+
+        elif key_str_length == 64:
+            p_key.mode = NvTegraSign_FSKP
+            info_print('Key Size is 32 bytes')
+
+        else:
+            info_print('Not an AES key', True)
+            return 0
+
+        key = str_to_hex(key_str)
+
+        p_key.keysize = int(key_str_length/2)
+
+        p_key.key.aeskey = bytearray(key)
+
+        return 1
+
+    except UnicodeDecodeError:
+        # key format is in a binary sequence
+        byte_cnt = len(pBuffer)
+
+        if byte_cnt == 16:
+            p_key.keysize = byte_cnt
+            p_key.key.aeskey = pBuffer
+            p_key.mode = NvTegraSign_SBK
+            info_print('Key is a SBK key')
+            info_print('Key Size is 16 bytes')
+            return 1
+
+        elif byte_cnt == 32:
+            p_key.keysize = byte_cnt
+            p_key.key.aeskey = pBuffer
+            p_key.mode = NvTegraSign_FSKP
+            info_print('Key Size is 32 bytes')
+            return 1
+    info_print('Not an AES key', True)
+    return 0
 
 def is_PKC_key(keyfilename, p_key, pkh, mont):
 
@@ -965,17 +1010,27 @@ def is_PKC_key(keyfilename, p_key, pkh, mont):
 
     # pack the arguments
     if pkh and mont:
+        if is_hsm():
+            from tegrasign_v3_hsm import get_rsa_mod_hsm, get_rsa_mont_hsm
+            return get_rsa_mod_hsm(p_key, pkh) and get_rsa_mont_hsm(p_key, mont)
+
         command.extend(['--isPkcKey', keyfilename, pkh, mont])
     elif pkh:
         if is_hsm():
-            return get_rsa_mod_hsm(keyfilename, p_key.keysize, pkh)
+            from tegrasign_v3_hsm import get_rsa_mod_hsm
+            return get_rsa_mod_hsm(p_key, pkh)
         command.extend(['--isPkcKey', keyfilename, pkh])
     elif mont:
+        if is_hsm():
+            from tegrasign_v3_hsm import get_rsa_mont_hsm
+            return get_rsa_mont_hsm(p_key, mont)
+
         command.extend(['--isPkcKey', keyfilename, pubkeyfile, mont])
         temp_copy = 1
     else:
         if is_hsm():
-            return get_rsa_mod_hsm(keyfilename, p_key.keysize)
+            from tegrasign_v3_hsm import get_rsa_mod_hsm
+            return get_rsa_mod_hsm(p_key)
         command.extend(['--isPkcKey', keyfilename])
 
     ret_str = run_command(command)
@@ -1004,12 +1059,21 @@ def is_ECC_key(keyfilename, p_key, pkh):
         command.extend(['--isEccKey', keyfilename, pkh])
 
     ret_str = run_command(command)
+
     if is_ret_ok(ret_str):
-        p_key.keysize = NV_ECC_SIG_STRUCT_SIZE
+        # See if the key is p521
+        if '521' in ret_str:
+            p_key.keysize = NV_ECC521_SIG_STRUCT_SIZE
+        else:
+            p_key.keysize = NV_ECC_SIG_STRUCT_SIZE
         return True
     return False
 
 def is_ED25519_key(keyfilename, p_key, pkh):
+
+    if is_hsm():
+        from tegrasign_v3_hsm import get_ed25519_pub_hsm
+        return get_ed25519_pub_hsm(p_key, pkh)
 
     command = exec_file(TegraOpenssl)
 
@@ -1023,3 +1087,563 @@ def is_ED25519_key(keyfilename, p_key, pkh):
         p_key.keysize = ED25519_SIG_SIZE
         return True
     return False
+
+def is_xmss_key(keyfilename, p_key, pkh):
+
+    file_size = os.path.getsize(keyfilename)
+
+    if (file_size == XMSS_KEY_SIZE):
+        p_key.keysize = XMSS_KEY_SIZE
+        info_print('Assuming XMSS key')
+        pub_file = os.path.splitext(os.path.basename(keyfilename))[0] + '.pub'
+        if pkh and check_file(pub_file):
+            # Duplicating the file because we need to pass that back to the caller
+            shutil.copyfile(pub_file, pkh)
+        return True
+    return False
+
+def do_kdf_kdf2(kdk, kdd, label = None, context = None, HexLabel = False):
+
+    msgStr = get_composed_msg(label,context, 256, HexLabel, True)
+
+    internal = SignKey()
+    if kdd == None:
+        internal.key.aeskey = str_to_hex(kdk)
+    else:
+        internal.key.aeskey = str_to_hex(kdk+kdd)
+
+    internal.keysize = len(internal.key.aeskey)
+    msg = str_to_hex(msgStr)
+
+    return do_hmac_sha256(msg, len(msg), internal)
+
+def do_kdf_params_t234(dk, params, kdf_list):
+    # Note some kdf is using string operation, some are hex operation
+    is_hex = True
+    is_str = False
+    L = 256
+    basic_params = params['BASIC']
+
+    # Derive the key relationship: dk -> kdk -> *_dec_kdk
+    dk_params = params['DK'][dk]
+    dk_ctx = {
+        'KDK'     : dk_params['KDK'],
+        'Label'   : hex_to_str(kdf_list[KdfArg.DKSTR]), # Note this is passed in
+        'Context' : hex_to_str(kdf_list[KdfArg.DKVER]), # Note this is passed in
+    }
+
+    dk_ctx['Msg'] = get_composed_msg(dk_ctx['Label'], dk_ctx['Context'], L, is_hex)
+
+    kdk_params = params['KDK'][dk_ctx['KDK']]
+    kdk_to_use = kdk_params['KDK']
+    kdk_ctx = {
+        'KDK'   : kdk_to_use,
+        'Label' : kdk_params["Label"],
+    }
+    kdk_ctx['Msg'] = get_composed_msg(kdk_ctx['Label'], '', L, is_str)
+
+    bl_dec_kdk_ctx = {}
+    fw_dec_kdk_ctx = {}
+
+    # Check if bl_dec_kdk is defined for this dk
+    if '_ROM_DEC_KDK' not in kdk_to_use:
+        bl_dec_kdk_params = params['DEC_KDK'][kdk_ctx['KDK']]
+        kdk_to_use = bl_dec_kdk_params['KDK']
+        bl_dec_kdk_ctx = {
+            'KDK'   : kdk_to_use,
+            'Label' : hex_to_str(kdf_list[KdfArg.BLSTR]),  # Note this is passed in
+        }
+
+        bl_dec_kdk_ctx['Msg'] = get_composed_msg(bl_dec_kdk_ctx['Label'], '', L, is_hex)
+
+        # Check if fw_dec_kdk is defined for this dk
+        if '_ROM_DEC_KDK' not in kdk_to_use:
+            fw_dec_kdk_params = params['DEC_KDK'][bl_dec_kdk_ctx['KDK']]
+            kdk_to_use = fw_dec_kdk_params['KDK']
+            fw_dec_kdk_ctx = {
+                "KDK"   : kdk_to_use,
+                "Label" : hex_to_str(kdf_list[KdfArg.FWSTR]),  # Note this is passed in
+            }
+
+            fw_dec_kdk_ctx['Msg'] = get_composed_msg(fw_dec_kdk_ctx['Label'], '', L, is_hex)
+        else:
+            fw_dec_kdk_ctx['Msg'] = None
+
+    else:
+        bl_dec_kdk_ctx['Msg'] = None
+        fw_dec_kdk_ctx['Msg'] = None
+
+    dec_kdk_params = params['DEC_KDK'][kdk_to_use]
+
+    dec_kdk_ctx = {
+        'KDK'   : basic_params[dec_kdk_params['KDK']],
+        'KDD'   : basic_params[dec_kdk_params['KDD']],
+        'Label' : dec_kdk_params['Label'],
+    }
+
+    dec_kdk_ctx["Msg"] = get_composed_msg(dec_kdk_ctx['Label'], '', L, is_str)
+
+    # Pop the elements that are no longer needed
+    while (len(kdf_list) > KdfArg.FLAG):
+        kdf_list.pop()
+
+    return ([dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], dec_kdk_ctx["Msg"],
+            bl_dec_kdk_ctx["Msg"], kdk_ctx["Msg"], dk_ctx["Msg"]])
+
+def do_kdf(params_slist, kdf_list):
+    base_name = script_dir + 'v3_kdf_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.tag'
+    raw_file = open_file(raw_name, 'wb')
+
+    # to write to file
+    # order: sizes then data for: deckdk_kdkkdd, deckdk_msg, (bl_deckdk_msg), kdk_msg, dk_msg, iv, aad, tag, src, result_name
+
+    for param in params_slist:
+        if param == None:
+            arr = int_2bytes(4, 0)
+        else:
+            arr = int_2bytes(4, len(str_to_hex(param)))
+        write_file(raw_file, arr)
+
+    for kdf in kdf_list:
+        arr = int_2bytes(4, len(kdf))
+        write_file(raw_file, arr)
+
+    arr = int_2bytes(4, len(result_name) + 1)
+    write_file(raw_file, arr)
+
+    for param in params_slist:
+        if param != None:
+            write_file(raw_file, str_to_hex(param))
+
+    for kdf in kdf_list:
+        write_file(raw_file, kdf)
+
+    write_file(raw_file, result_name.encode("utf-8"))
+    nullarr = bytearray(1)
+    nullarr[0] = 0          # need this null for char*
+    write_file(raw_file, nullarr)
+    raw_file.close()
+
+    command = exec_file(TegraOpenssl)
+    command.extend(['--kdf', raw_name])
+
+    ret_str = run_command(command)
+
+    if check_file(result_name):
+        result_fh = open_file(result_name, 'rb')
+        buff_dgst = result_fh.read()
+        kdf_list[KdfArg.TAG] = buff_dgst[:]
+
+        with open(raw_name, 'rb') as f:
+            buff_data = bytearray(f.read())
+            src_bytes = len(kdf_list[KdfArg.SRC])
+            result_bytes = len(result_name) + 1
+            payload_offset = len(buff_data) - src_bytes - result_bytes
+            kdf_list[KdfArg.SRC] = buff_data[payload_offset:payload_offset+src_bytes]
+        result_fh.close()
+        os.remove(raw_name)
+        os.remove(result_name)
+        return True
+    os.remove(raw_name)
+    return False
+
+def do_derive_dk(dk, params, kdf_list, chipid):
+    dk_list = params['DK']
+
+    if dk in dk_list:
+        if chipid == '0x230':
+            params_slist = do_kdf_params_t234(dk, params, kdf_list)
+            return do_kdf(params_slist, kdf_list)
+    raise tegrasign_exception('Can not derive %s' % (dk))
+
+def do_kdf_params_oem(dk, params, kdf_list):
+    # Note some kdf is using string operation, some are hex operation
+    is_hex = True
+    is_str = False
+    L = 256
+    basic_params = params['BASIC']
+
+    dk_params = params['DK'][dk]
+    dk_ctx = {
+        "KDK" : dk_params['KDK'],
+        'Label'   : hex_to_str(kdf_list[KdfArg.DKSTR]), # Note this is passed in
+        'Context' : hex_to_str(kdf_list[KdfArg.DKVER]), # Note this is passed in
+    }
+
+    dk_ctx["Msg"] = get_composed_msg(dk_ctx['Label'], dk_ctx['Context'], L, is_hex)
+
+    kdk_params = params['KDK'][dk_ctx['KDK']]
+    kdk_to_use = kdk_params['KDK']
+    kdk_ctx = {
+        "KDK" : kdk_to_use,
+        "Label" : kdk_params["Label"],
+    }
+
+    kdk_ctx['Msg'] = get_composed_msg(kdk_ctx['Label'], '', L, is_str)
+    bl_kdk_ctx = {}
+    fw_kdk_ctx = {}
+
+    # Check if sbk_bl_kdk is defined for this dk
+    if 'SBK_' in kdk_to_use:
+        bl_kdk_params = params['KDK'][kdk_ctx['KDK']]
+        kdk_to_use = bl_kdk_params['KDK']
+        bl_kdk_ctx = {
+            'KDK'   : kdk_to_use,
+            'Label' : hex_to_str(kdf_list[KdfArg.BLSTR]),    # Note this is passed in
+        }
+
+        bl_kdk_ctx['Msg'] = get_composed_msg(bl_kdk_ctx['Label'], '', L, is_hex)
+
+        # Check if sbk_fw_kdk is defined for this dk
+        if 'SBK_' in kdk_to_use:
+            fw_kdk_params = params['KDK'][bl_kdk_ctx['KDK']]
+            kdk_to_use = fw_kdk_params['KDK']
+            fw_kdk_ctx = {
+                "KDK"   : kdk_to_use,
+                "Label" : hex_to_str(kdf_list[KdfArg.FWSTR]), # Note this is passed in
+            }
+
+            fw_kdk_ctx['Msg'] = get_composed_msg(fw_kdk_ctx['Label'], '', L, is_hex)
+        else:
+            fw_kdk_ctx['Msg'] = None
+
+    else:
+        bl_kdk_ctx['Msg'] = None
+        fw_kdk_ctx['Msg'] = None
+
+    aes_params = params['AES'][kdk_to_use]
+    aes_iv = manifest_xor_offset(basic_params[aes_params['IV']], aes_params["Offset"])
+    aes_aad = aes_params['Manifest'] + AAD_0_96
+    aes_tag = bytes(16)
+
+    dec_kdk_params = params['DEC_KDK'][aes_params['KDK']]
+
+    dec_kdk_ctx = {
+        'KDK'   : basic_params[dec_kdk_params['KDK']],
+        'KDD'   : basic_params[dec_kdk_params['KDD']],
+        "Label" : dec_kdk_params["Label"],
+    }
+
+    dec_kdk_ctx["Msg"] = get_composed_msg(dec_kdk_ctx['Label'], '', L, is_str)
+
+    # Pop the elements that are no longer needed
+    while (len(kdf_list) > KdfArg.DKSTR):
+        kdf_list.pop()
+
+
+    return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, aes_params["Plain"], dec_kdk_ctx["Msg"],
+            bl_kdk_ctx["Msg"], kdk_ctx["Msg"], dk_ctx["Msg"]]
+
+def do_kdf_oem(params_slist, kdf_list):
+    if is_hsm():
+        from tegrasign_v3_hsm import do_kdf_oem_hsm
+        return do_kdf_oem_hsm(params_slist, kdf_list)
+
+    base_name = script_dir + 'v3_aeskdf_' + pid
+    raw_name = base_name + '.raw'
+    result_name = base_name + '.tag'
+    raw_file = open_file(raw_name, 'wb')
+
+    # to write to file
+    # order: sizes then data for: deckdk_kdkkdd, deckdk_iv, deckdk_aad, deckdk_plain, deckdk_msg, kdk_msg, dk_msg, iv, aad, tag, src, flag, result_name
+
+    for param in params_slist:
+        if param == None:
+            arr = int_2bytes(4, 0)
+        else:
+            arr = int_2bytes(4, len(str_to_hex(param)))
+        write_file(raw_file, arr)
+
+    for kdf in kdf_list:
+        arr = int_2bytes(4, len(kdf))
+        write_file(raw_file, arr)
+
+    arr = int_2bytes(4, len(result_name) + 1)
+    write_file(raw_file, arr)
+
+    for param in params_slist:
+        if param != None:
+            write_file(raw_file, str_to_hex(param))
+
+    for kdf in kdf_list:
+        if (type(kdf) == str) and (len(kdf) == 1): # handles flag that is a 1-char str
+            arr = int_2bytes(1, ord(kdf))
+            write_file(raw_file, arr)
+        else:
+             write_file(raw_file, kdf)
+
+    write_file(raw_file, result_name.encode("utf-8"))
+    nullarr = bytearray(1)
+    nullarr[0] = 0          # need this null for char*
+    write_file(raw_file, nullarr)
+    raw_file.close()
+
+    command = exec_file(TegraOpenssl)
+    command.extend(['--kdfoem', raw_name])
+
+    ret_str = run_command(command)
+
+    if check_file(result_name):
+        result_fh = open_file(result_name, 'rb')
+        buff_dgst = result_fh.read()
+        kdf_list[KdfArg.TAG] = buff_dgst[:]
+
+        with open(raw_name, 'rb') as f:
+            buff_data = bytearray(f.read())
+            src_bytes = len(kdf_list[KdfArg.SRC])
+            flg_bytes = len(kdf_list[KdfArg.FLAG])
+            result_bytes = len(result_name) + 1
+            payload_offset = len(buff_data) - src_bytes - result_bytes - flg_bytes
+            kdf_list[KdfArg.SRC] = buff_data[payload_offset:payload_offset+src_bytes]
+        result_fh.close()
+        os.remove(result_name)
+        os.remove(raw_name)
+        return True
+    os.remove(raw_name)
+    return False
+
+def do_derive_dk_oem(dk, params, kdf_list, chipid):
+    dk_list = params['DK']
+
+    if dk in dk_list:
+        params_slist = do_kdf_params_oem(dk, params, kdf_list)
+
+        return do_kdf_oem(params_slist, kdf_list)
+    raise tegrasign_exception('Can not derive %s' % (dk))
+
+def map_bin_to_dk_oem(enc_file, params, magicid):
+    basename = os.path.splitext(os.path.basename(enc_file))[0].lower()
+    ext = os.path.splitext(os.path.basename(enc_file))[1].lower()
+
+    if 'bpmp' in basename and 'ist' in basename:
+        return 'SBK_BPMP_IST_DK'
+
+    if ('bpmp' in basename) and ('.dtb' == ext):
+        return 'SBK_BPMP_DTB_DK'
+
+    if 'ape' in basename:
+        return 'SBK_APE_DK'
+
+    if 'applet' in basename:
+        return 'SBK_BPMP_MB2_DK'
+
+    if 'bpmp' in basename:
+        return 'SBK_BPMP_FW_DK'
+
+    if 'br_bct' in basename:
+        return 'SBK_BCT_DK'
+
+    if 'cpurf' in basename:
+        return 'SBK_MB2_RF_DK'
+
+    if 'dce' in basename:
+        return 'SBK_DCE_DK'
+
+    if 'eks' in basename:
+        return 'SBK_EKS_DK'
+
+    if 'ist' in basename and 'config' in basename: # This is IST-CONFIG
+        return 'SBK_IST_CONFIG_DK'
+
+    if 'ist' in basename and 'ucode' in basename:  # This is IST-UCODE (Key ON/OFF IST)
+        return 'SBK_IST_UCODE_DK'
+
+    if 'oist' in basename and 'ucode' in basename: # This is CCPLEX-IST-UCODE
+        return 'SBK_CCPLEX_IST_DK'
+
+    if 'mb1_bct' in basename or ('mb1' in basename and 'bct' in basename):
+        return 'SBK_MB1BCT_DK'
+
+    if 'mb1' in basename:
+        return 'SBK_MB1_DK'
+
+    if 'mb2_bct' in basename:
+        return 'SBK_MB2BCT_DK'
+
+    if 'mb2' in basename:
+        return 'SBK_MB2_DK'
+
+    if 'mce' in basename:
+        return 'SBK_MCE_DK'
+
+    if 'mem' in basename and ('.bct' == ext):
+        if '0' in basename:
+            return 'SBK_MEMBCT0_DK'
+        elif '1' in basename:
+            return 'SBK_MEMBCT1_DK'
+        elif '2' in basename:
+            return 'SBK_MEMBCT2_DK'
+        elif '3' in basename:
+            return 'SBK_MEMBCT3_DK'
+
+    if 'nvdec' in basename:
+        return 'SBK_NVDEC_DK'
+
+    if 'psc_bl' in basename:
+        return 'SBK_BL1_DK'
+
+    if 'pscfw' in basename:
+        return 'SBK_PSCFW_PKG_DK'
+
+    if 'psc_rf' in basename:
+        return 'SBK_PSC_RF_DK'
+
+    if 'rce' in basename:
+        return 'SBK_RCE_DK'
+
+    if 'sc7' in basename:
+        return 'SBK_SC7_RF_DK'
+
+    if 'spe' in basename:
+        return 'SBK_SPE_DK'
+
+    if 'tos' in basename:
+        return 'SBK_TOS_DK'
+
+    if 'tsec' in basename:
+        return 'SBK_TSEC_DK'
+
+    if 'uefi' and 'jetson' in basename:
+        return 'SBK_CPU_BL_DK'
+
+    if magicid != None:
+        # To find the DK for this magic id
+        kdk_params = params.get('KDK')
+        dk_params = params.get('DK')
+        for kdk in kdk_params:
+            kdk_val = kdk_params.get(kdk)
+            if len(kdk_val) == 1:
+                continue
+            if kdk_val['Label'] == magicid:
+                for dk in dk_params:
+                   if (kdk == dk_params.get(dk)['KDK']):
+                       return dk
+    raise tegrasign_exception('Can not identify the key choice for %s' % (enc_file))
+
+def load_params_oem(enc_file, chipid, magicid):
+    import yaml
+    cfg_file = 'tegrasign_v3_oemkey.yaml'
+
+    with open(cfg_file) as f:
+        params = yaml.safe_load(f)
+
+    dk = map_bin_to_dk_oem(enc_file, params['DER_OEM'][chipid], magicid)
+    return dk, params['DER_OEM'][chipid]
+
+def do_kdf_cbc(p_key):
+    # Note some kdf is using string operation
+    is_hex = False
+    L = 128 # key length in bits
+
+    p_key.kdf.get_composed_msg(L, is_hex, is_hex)
+
+    raw_name = base_name + '.raw'
+    raw_file = open_file(raw_name, 'wb')
+    filename = p_key.src_file
+
+    result_name = os.path.splitext(filename)[0] + '_encrypt' + os.path.splitext(filename)[1]
+
+    # to write to file
+    # order: sizes then data for: msg, iv, src, result_name
+    kdf_list = [p_key.kdf.get_hexmsg(), p_key.key.aeskey, p_key.kdf.iv.get_hexbuf(), p_key.get_sign_buf()]
+
+    for kdf in kdf_list:
+        if kdf == None:
+            arr = int_2bytes(4, 0)
+        else:
+            arr = int_2bytes(4, len(kdf))
+        write_file(raw_file, arr)
+
+    arr = int_2bytes(4, len(result_name) + 1)
+    write_file(raw_file, arr)
+
+    for kdf in kdf_list:
+        if kdf != None:
+             write_file(raw_file, kdf)
+
+    nullarr = bytearray(1)
+    nullarr[0] = 0          # need this null for char*
+
+    write_file(raw_file, result_name.encode("utf-8"))
+    write_file(raw_file, nullarr)
+    raw_file.close()
+
+    command = exec_file(TegraOpenssl)
+    command.extend(['--kdfcbc', raw_name])
+
+    ret_str = run_command(command)
+    os.remove(raw_name)
+
+    if check_file(result_name):
+        return True
+    return False
+
+def do_derive_hmacsha(p_key):
+    if is_hsm():
+        from tegrasign_v3_hsm import do_derive_hmacsha_hsm
+        buff_hash = do_derive_hmacsha_hsm(p_key.get_sign_buf(), p_key)
+    else:
+        key = do_kdf_kdf2(hex_to_str(p_key.key.aeskey), None, p_key.kdf.label.get_strbuf(), p_key.kdf.context.get_strbuf(), True)
+        backup = p_key
+        backup.key.aeskey = key
+        buff_hash = do_hmac_sha256(p_key.get_sign_buf(), p_key.len, backup)
+
+    # save hash to *.hash file
+    hash_file_name = os.path.splitext(p_key.src_file)[0] + '.hash'
+    with open(hash_file_name, "wb") as f:
+        f.write(buff_hash)
+
+def do_derive_aesgcm(p_key, internal):
+    if is_hsm():
+        from tegrasign_v3_hsm import do_derive_aesgcm_hsm
+        buff_enc = do_derive_aesgcm_hsm(p_key.get_sign_buf(), p_key)
+    else:
+        key = do_kdf_kdf2(hex_to_str(p_key.key.aeskey), None, p_key.kdf.label.get_strbuf(), p_key.kdf.context.get_strbuf(), True)
+        backup = p_key
+        backup.key.aeskey = key
+        buff_enc = do_aes_gcm(p_key.get_sign_buf(), p_key.len, backup, internal["--iv"], internal["--aad"], internal["--tag"],
+            internal["--verify"], internal["--verbose"])
+
+    with open(p_key.src_file, 'rb') as f:
+        buff_data = bytearray(f.read())
+
+    buff_data = buff_data[0:p_key.off] + buff_enc + buff_data[p_key.off + p_key.len:]
+
+    enc_file_name = os.path.splitext(p_key.src_file)[0] + '_encrypt' + os.path.splitext(p_key.src_file)[1]
+    with open(enc_file_name, 'wb') as f:
+        f.write(buff_data)
+
+    tag_file_name = os.path.splitext(p_key.src_file)[0] + '.tag'
+    with open(tag_file_name, 'wb') as f:
+        f.write(p_key.kdf.tag.get_hexbuf())
+
+def do_derive_cbc(p_key):
+    if is_hsm():
+        from tegrasign_v3_hsm import do_derive_cbc_hsm
+        return do_derive_cbc_hsm(p_key.get_sign_buf(), p_key)
+
+    return do_kdf_cbc(p_key)
+
+'''
+Perform key operation and pad back values for tag & src if successful
+'''
+def do_key_derivation(enc_file, kdf_list, chipid, magicid = None):
+    try:
+        info_print('Perform key derivation on ' + enc_file)
+
+        if (kdf_list[KdfArg.FLAG] <= DerKey.NVPDS):
+            from tegrasign_v3_nvkey_load import load_params
+            dk, params = load_params(enc_file, kdf_list[KdfArg.FLAG], chipid)
+            return do_derive_dk(dk, params, kdf_list, chipid)
+        else:
+            dk, params = load_params_oem(enc_file, chipid, magicid)
+            return do_derive_dk_oem(dk, params, kdf_list, chipid)
+
+    except ImportError as e:
+        raise tegrasign_exception('Please check setup. Could not find ' + str(e))
+
+    except Exception as e:
+        info_print(traceback.format_exc())
+        raise tegrasign_exception("Unknown %s requested for key derivation encryption. Error %s" %(enc_file, str(e)))

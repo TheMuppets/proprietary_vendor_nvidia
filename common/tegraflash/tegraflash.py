@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2014-2021, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2014-2022, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -9,35 +9,48 @@
 # license agreement from NVIDIA Corporation is strictly prohibited.
 #
 
-import sys
-import os
-from os.path import expanduser
-
-# insert current working directory
-sys.path.insert(1, os.getcwd())
-
-import getopt
+import cmd
 import collections
-import subprocess
+import errno
+import getopt
+import os
 import shlex
 import shutil
 import string
-import cmd
-import errno
+import subprocess
+import sys
+from os.path import expanduser
+
 import tegraflash_internal
-from tegraflash_internal import cmd_environ, paths, tegraflash_update_img_path
-from tegraflash_internal import tegraflash_exception, tegraflash_os_path, tegraflash_abs_path
-from tegraflash_internal import tegraflash_mkdevimages, tegraflash_flash, tegraflash_sign, tegraflash_encrypt_and_sign
-from tegraflash_internal import tegraflash_test, tegraflash_read, tegraflash_write, tegraflash_erase, tegraflash_setverify, tegraflash_verify
-from tegraflash_internal import tegraflash_ccgupdate, tegraflash_packageccg
-from tegraflash_internal import tegraflash_parse, tegraflash_reboot, tegraflash_dump
-from tegraflash_internal import tegraflash_rcmbl, tegraflash_rcmboot, tegraflash_encrypt_sign_binary
-from tegraflash_internal import tegraflash_burnfuses, tegraflash_readfuses, tegraflash_blowfuses
-from tegraflash_internal import tegraflash_provision_rollback, tegraflash_readmrr, tegraflash_symlink
-from tegraflash_internal import tegraflash_secureflash, tegraflash_signwrite, tegraflash_nvsign
-from tegraflash_internal import tegraflash_flush_sata, tegraflash_sata_fwdownload
-from tegraflash_internal import tegraflash_ufs_otp, tegraflash_generate_recovery_blob
-from tegraflash_internal import tegraflash_update_rpmb
+from tegraflash_internal import (cmd_environ, paths,
+                                 tegraflash_abs_path, tegraflash_blowfuses,
+                                 tegraflash_burnfuses, tegraflash_ccgupdate,
+                                 tegraflash_dump, tegraflash_encrypt_and_sign,
+                                 tegraflash_erase, tegraflash_exception,
+                                 tegraflash_flash, tegraflash_flush_sata,
+                                 tegraflash_generate_recovery_blob,
+                                 tegraflash_mkdevimages, tegraflash_nvsign,
+                                 tegraflash_os_path, tegraflash_packageccg,
+                                 tegraflash_parse,
+                                 tegraflash_provision_rollback,
+                                 tegraflash_rcmbl, tegraflash_rcmboot,
+                                 tegraflash_read, tegraflash_readfuses,
+                                 tegraflash_readmrr, tegraflash_reboot,
+                                 tegraflash_sata_fwdownload,
+                                 tegraflash_secureflash, tegraflash_setverify,
+                                 tegraflash_sign, tegraflash_encrypt_sign_binary,
+                                 tegraflash_signwrite, tegraflash_symlink,
+                                 tegraflash_test, tegraflash_ufs_otp,
+                                 tegraflash_update_img_path,
+                                 tegraflash_update_rpmb, tegraflash_verify,
+                                 tegraflash_write)
+try:
+    from tegraflash_impl_t234 import (TFlashT23x)
+except ImportError:
+    print("WARNING: failed to import T23x module")
+
+# insert current working directory
+sys.path.insert(1, os.getcwd())
 
 try:
     input = raw_input
@@ -52,21 +65,24 @@ exports = {
             "--bct":None, "--bct_cold_boot":None, "--key":'None', "--encrypt_key":None, "--cfg":None, "--bl":None,
             "--board":None, "--eeprom":None, "--cmd":None, "--instance":None, "--bpfdtb":None,
             "--hostbin":None, "--applet":None,"--dtb":None, "--bldtb":None, "--kerneldtb":None, "--chip":None,
-            "--out":None, "--nct":None, "--fb":None, "--odmdata":None,
+            "--out":None, "--nct":None, "--fb":None, "--odmdata":None, "--overlay_dtb":None,
             "--lnx":None, "--tos":None, "--eks":None, "--boardconfig":None,
             "--skipuid":False, "--securedev":False, "--keyindex":None, "--keep":False,
             "--wb":None, "--bl-load":None, "--bins":None, "--dev_params":None,
-            "--sdram_config":None, "--ramcode": None, "--misc_config":None,  "--misc_cold_boot_config":None,
+            "--sdram_config":None, "--ramcode": None, "--misc_config":None, "--mb2bct_cfg":None,
+            "--misc_cold_boot_config":None,
             "--pinmux_config":None, "--pmc_config":None, "--pmic_config":None,
             "--gpioint_config":None, "--uphy_config":None, "--scr_config":None,
             "--scr_cold_boot_config":None, "--br_cmd_config":None, "--prod_config":None,
-            "--device_config":None, "--applet-cpu":None, "--bpf":None, "--mb1_bct":None,
-            "--mb1_cold_boot_bct":None, "--skipsanitize":False, "--tegraflash_v2":False,
+            "--device_config":None, "--applet-cpu":None, "--bpf":None, "--mb1_bct":None, "--mb2_bct":None,
+            "--mb1_cold_boot_bct":None, "--mb2_cold_boot_bct":None, "--skipsanitize":False, "--tegraflash_v2":False,
             "--chip_major":"0", "--nv_key":None, "--nvencrypt_key":None, "--cl":"39314184",
             "--soft_fuses":None, "--deviceprod_config":None, "--rcm_bct":None, "--secureboot":False,
             "--mem_bct":None, "--mem_bct_cold_boot":None, "--minratchet_config":None,
-            "--wb0sdram_config":None, "--blversion":None, "--ratchet_blob":None, "--output_dir":None,
-            "--applet_softfuse":None, "--ignorebfs":None, "--trim_bpmp_dtb":False, "--external_device":False
+            "--wb0sdram_config":None, "--blversion":None, "--output_dir":None, "--nv_nvratchet":"0",
+            "--nv_oemratchet":"0", "--image_dirs":None, "--trim_bpmp_dtb":False, "--cpubl":None,
+            "--concat_cpubl_bldtb":False, "--external_device":False, "--cust_info": None,
+            "--fuse_info": None, "--sparseupdate": False,
           }
 
 exit_on_error = False
@@ -74,18 +90,20 @@ exit_on_error = False
 def usage():
     print( '\n'.join([
     '  Usage: tegraflash [--bct <file>] [--bct_cold_boot <file>] [--cfg <file>] [--bl <file>] [--instance <number>]',
-    '                    [--chip <number>] [--dtb <file>] [--bldtb <file>] [--kerneldtb <file>]'
+    '                    [--chip <number>] [--dtb <file>] [--bldtb <file>] [--kerneldtb <file>]',
     '                    [--key <file>] [--encrypt_key <file> [--cmd \"commands\"] [--bpfldtb <file>]',
     '                    [--applet <file>] [--nct <file>] [--hostbin <dir>] [--out <dir>]',
     '                    [--boardconfig <file>] [--skipuid] [--securedev] [--keyindex <number>]',
     '                    [--bl-load <addr>] [--dev_params <file>] [--sdram_config <file>] [--ramcode <index>]',
     '                    [--bins <image_type> <file> [load_address][;...]]',
     '                    [--misc_config <file>] [--mb1_bct <file>] [--blversion <number> <number>]',
+    '                    [--mb2bct_cfg <file>] [--mb2_bct <file>]',
     '                    [--pinmux_config <file>] [--pmc <file>] [--scr_config <file>]',
     '                    [--pmic_config <file>] [--br_cmd_config <file>] [--prod_config <file]',
     '                    [--gpioint_config <file>] [--uphy_config <file>] [--device_config <file>]',
     '                    [--deviceprod_config <file>] [--minratchet_config <file>] [--skipsanitize] [--keep]',
-    '                    [--external_device]',
+    '                    [--output_dir <dir>] [--external_device], [--odmdata <odmdata|odmdata str>]',
+    '                    [--overlay_dtb <dtb files>] [--cust_info <file>] [--sparseupdate]',
     '   ',
     '   --bct           : Bootrom Boot Config Table file',
     '   --bct_cold_boot  : Bootrom Boot Config Table file for cold boot',
@@ -113,6 +131,7 @@ def usage():
     '   --ramcode       : The ramcode value',
     '   --bins          : List of binaries to be downloaded separated by commad(;)',
     '   --misc_config   : Misc BCT configuration',
+    '   --mb2bct_cfg    : MB2 BCT configuration',
     '   --misc_cold_boot_config : Misc BCT configuration to be used in coldboot',
     '   --pinmux_config : Pinmux BCT configuration',
     '   --scr_config    : SCR BCT configuration',
@@ -127,14 +146,28 @@ def usage():
     '   --deviceprod_config : Device specific Prod configurations',
     '   --minratchet_config : Minimum ratchet level of oem-fw',
     '   --mb1_bct       : MB1 BCT file',
+    '   --mb2_bct       : MB2 BCT file',
     '   --mb1_cold_boot_bct: MB1 BCT file used in coldboot',
+    '   --mb2_cold_boot_bct: MB2 BCT file used in coldboot',
     '   --soft_fuses    : MB1 Soft fuse config',
     '   --hostbin       : Directory contaning host binaries',
     '   --out           : Directory containing device files',
     '   --keep          : Keep temporary directory',
-    '   --external_device: Generate images for an external device',
-    '   --ignorebfs     : If user use this option, NO Fail-safe OTA',
+    '   --output_dir    : Directory to store dev_images',
+    '   --nv_nvratchet  : NV ratchet level in NV signed binary',
+    '   --nv_oemratchet : OEM ratchet level in NV signed binary',
+    '   --image_dirs    : Comma separated list of directories for the binary image files',
     '   --trim_bpmp_dtb : Remove unused emc strap data from BPMP dtb',
+    '   --cpubl         : CPU Bootloader File',
+    '   --concat_cpubl_bldtb : Concatenate CPU Bootloader and its DTB file',
+    '   --external_device: Generate images for an external device',
+    '   --odmdata       : ODMDATA to write into BCT (Usage for T194 and before)',
+    '                   : ODMDATA string that is commma separated (Usage for T234 and onward)',
+    '                   : gbe-uphy-config_1,nvhs-uphy-config_2,hsio-uphy-config_3,gbe0-mode-10g (nn T234 example)',
+    '   --overlay_dtb   : a list of comma seperated dtbs to be applied to base dtb',
+    '   --cust_info     : customer data to be filled into BR-BCT',
+    '   --fuse_info     : fuse information xml for generating fuse_info binary',
+    '   --sparseupdate  : only flash partitions that have changed. Currently only support SPI flash memory '
     '   '
     ]))
 
@@ -154,6 +187,7 @@ class tegraflashcmds(cmd.Cmd):
             ' '
             ]))
         cmd.Cmd.__init__(self)
+        self.chip_inst = self.chip_parser()
 
     def do_quit(self, params):
         return True;
@@ -171,6 +205,16 @@ class tegraflashcmds(cmd.Cmd):
     def do_q(self, params):
         return True;
 
+    def chip_parser(self):
+        """ Chip parser that instantiates the class of the chip
+        """
+        chip_id = int(exports['--chip'], 0)
+        if chip_id == 0x23:
+            chip_inst = TFlashT23x(chip_id)
+        else:
+            chip_inst = tegraflash_internal
+        return chip_inst
+
     def do_mkdevimages(self, param):
         tegraflash_update_env()
         params = param.replace('  ', ' ')
@@ -182,7 +226,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_mkdevimages(exports, args)
+            self.chip_inst.tegraflash_mkdevimages(exports, args)
 
         except tegraflash_exception as e:
             print('Error: '+ e.value)
@@ -192,11 +236,12 @@ class tegraflashcmds(cmd.Cmd):
         print('\n'.join([
         ' ',
         '------------------------------------------------------',
-        '  Usage: mkdevimages --bct <file> --cfg <file> [--key <file>]',
+        '  Usage: mkdevimages --bct <file> --cfg <file> [--key <file>] [--output_dir <dir>]',
         '------------------------------------------------------',
         '   --bct    : Boot configuration Table',
         '   --cfg    : Partition layout configuration',
         '   --key    : Key file',
+        '   --output_dir : Directory to store dev images',
         '------------------------------------------------------',
         ' ',
         ]))
@@ -213,7 +258,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_flash(exports)
+            self.chip_inst.tegraflash_flash(exports)
 
         except tegraflash_exception as e:
             print('Error: '+ e.value)
@@ -247,7 +292,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_secureflash(exports)
+            self.chip_inst.tegraflash_secureflash(exports)
 
         except tegraflash_exception as e:
             print('Error: '+ e.value)
@@ -281,7 +326,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_rcmbl(exports)
+            self.chip_inst.tegraflash_rcmbl(exports)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
             tegraflash_err(1)
@@ -321,7 +366,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_rcmboot(exports)
+            self.chip_inst.tegraflash_rcmboot(exports)
 
         except tegraflash_exception as e:
             print('Error: '+ e.value)
@@ -361,7 +406,7 @@ class tegraflashcmds(cmd.Cmd):
 
             try:
                 file_path = tegraflash_abs_path(args[1])
-                tegraflash_read(exports, args[0], file_path)
+                self.chip_inst.tegraflash_read(exports, args[0], file_path)
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -390,7 +435,7 @@ class tegraflashcmds(cmd.Cmd):
 
             try:
                 file_path = tegraflash_abs_path(args[1])
-                tegraflash_write(exports, args[0], file_path)
+                self.chip_inst.tegraflash_write(exports, args[0], file_path)
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -452,7 +497,7 @@ class tegraflashcmds(cmd.Cmd):
             try:
                 file_path1 = tegraflash_abs_path(args[0])
                 file_path2 = tegraflash_abs_path(args[1])
-                tegraflash_ccgupdate(exports, file_path1, file_path2)
+                self.chip_inst.tegraflash_ccgupdate(exports, file_path1, file_path2)
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -483,7 +528,7 @@ class tegraflashcmds(cmd.Cmd):
 
             try:
                 file_path = tegraflash_abs_path(args[1])
-                tegraflash_signwrite(exports, args[0], file_path)
+                self.chip_inst.tegraflash_signwrite(exports, args[0], file_path)
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -508,7 +553,7 @@ class tegraflashcmds(cmd.Cmd):
         params = params.replace('  ', ' ')
         args = params.split(' ')
         only_sign = False
-        if len(args) >= 1:
+        if len(args) >= 2:
             tegraflash_update_env()
             compulsory_args = ['--chip', '--nv_key', '--nvencrypt_key']
 
@@ -519,13 +564,14 @@ class tegraflashcmds(cmd.Cmd):
             try:
                 file_path = tegraflash_abs_path(paths['OUT'] + '/' + args[0])
                 print('file path ' + file_path)
-                if len(args) == 2:
-                    if args[1] == 'only_sign':
+                magic = args[1]
+                if len(args) == 3:
+                    if args[2] == 'only_sign':
                        only_sign = True
                     else:
-                       print('wrong option ' + args[1] + ' for nvsign')
+                       print('wrong option ' + args[2] + ' for nvsign')
                        tegraflash_err(1)
-                tegraflash_nvsign(exports, file_path, only_sign)
+                self.chip_inst.tegraflash_nvsign(exports, file_path, magic, only_sign)
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -560,7 +606,7 @@ class tegraflashcmds(cmd.Cmd):
                     exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
             try:
-                tegraflash_erase(exports, args[0])
+                self.chip_inst.tegraflash_erase(exports, args[0])
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -579,7 +625,7 @@ class tegraflashcmds(cmd.Cmd):
     def do_verify(self, params):
         tegraflash_update_env()
         try:
-            tegraflash_verify(args)
+            self.chip_inst.tegraflash_verify(args)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
 
@@ -606,7 +652,7 @@ class tegraflashcmds(cmd.Cmd):
                     exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
             try:
-                tegraflash_setverify(exports, args[0])
+                self.chip_inst.tegraflash_setverify(exports, args[0])
 
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
@@ -631,7 +677,7 @@ class tegraflashcmds(cmd.Cmd):
             if not args[0]:
                 args[0] = "coldboot"
 
-            tegraflash_reboot(args)
+            self.chip_inst.tegraflash_reboot(args)
 
         except tegraflash_exception as e:
             print('Error: '+ e.value)
@@ -664,11 +710,18 @@ class tegraflashcmds(cmd.Cmd):
                     if exports[required_arg] is None:
                         exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
                 if exports['--encrypt_key'] is None:
-                    tegraflash_sign(exports)
+                    self.chip_inst.tegraflash_sign(exports)
                 else:
-                    tegraflash_encrypt_and_sign(exports)
+                    self.chip_inst.tegraflash_encrypt_and_sign(exports)
             else:
-                tegraflash_encrypt_sign_binary(exports, args)
+                # Only route the following condition for t234, old chips remain the same path
+                if int(exports['--chip'], 0) == 0x23:
+                    if exports['--encrypt_key'] is None:
+                        self.chip_inst.tegraflash_sign(exports, args)
+                    else:
+                        self.chip_inst.tegraflash_encrypt_sign_binary(exports, args)
+                else:
+                    self.chip_inst.tegraflash_encrypt_sign_binary(exports, args)
 
         except tegraflash_exception as e:
             print('Error: '+ e.value)
@@ -701,7 +754,7 @@ class tegraflashcmds(cmd.Cmd):
                     if exports[required_arg] is None:
                         exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
                 try:
-                    tegraflash_test(exports, args)
+                    self.chip_inst.tegraflash_test(exports, args)
                 except tegraflash_exception as e:
                     print('Error: '+ e.value)
                     tegraflash_err(1)
@@ -753,7 +806,7 @@ class tegraflashcmds(cmd.Cmd):
                     exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
             try:
-                tegraflash_parse(exports, args)
+                self.chip_inst.tegraflash_parse(exports, args)
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
                 tegraflash_err(1)
@@ -782,7 +835,7 @@ class tegraflashcmds(cmd.Cmd):
                     exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
             try:
-                tegraflash_dump(exports, args)
+                self.chip_inst.tegraflash_dump(exports, args)
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
                 tegraflash_err(1)
@@ -820,7 +873,7 @@ class tegraflashcmds(cmd.Cmd):
                     exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
             try:
-                tegraflash_burnfuses(exports, args)
+                self.chip_inst.tegraflash_burnfuses(exports, args)
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
                 tegraflash_err(1)
@@ -860,7 +913,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_blowfuses(exports, args)
+            self.chip_inst.tegraflash_blowfuses(exports, args)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
             tegraflash_err(1)
@@ -889,7 +942,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_readfuses(exports, args)
+            self.chip_inst.tegraflash_readfuses(exports, args)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
 
@@ -912,7 +965,7 @@ class tegraflashcmds(cmd.Cmd):
     def do_flush_sata(self, params):
         tegraflash_update_env()
         try:
-            tegraflash_flush_sata(args)
+            self.chip_inst.tegraflash_flush_sata(args)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
             tegraflash_err(1)
@@ -931,7 +984,7 @@ class tegraflashcmds(cmd.Cmd):
         args = params.split()
         try:
             file_path = tegraflash_abs_path(args[0]) if len(args) >= 1 else None
-            tegraflash_sata_fwdownload(file_path)
+            self.chip_inst.tegraflash_sata_fwdownload(file_path)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
             tegraflash_err(1)
@@ -957,7 +1010,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_provision_rollback(exports, args)
+            self.chip_inst.tegraflash_provision_rollback(exports, args)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
             tegraflash_err(1)
@@ -1032,7 +1085,7 @@ class tegraflashcmds(cmd.Cmd):
             if exports[required_arg] is None:
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
         try:
-            tegraflash_readmrr(exports, args)
+            self.chip_inst.tegraflash_readmrr(exports, args)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
             tegraflash_err(1)
@@ -1050,7 +1103,7 @@ class tegraflashcmds(cmd.Cmd):
                     exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
             try:
-                tegraflash_ufs_otp(exports, args)
+                self.chip_inst.tegraflash_ufs_otp(exports, args)
             except tegraflash_exception as e:
                 print('Error: '+ e.value)
                 tegraflash_err(1)
@@ -1078,7 +1131,7 @@ class tegraflashcmds(cmd.Cmd):
                exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
        try:
-           tegraflash_generate_recovery_blob(exports, args)
+           self.chip_inst.tegraflash_generate_recovery_blob(exports, args)
 
        except tegraflash_exception as e:
            print('Error: '+ e.value)
@@ -1105,7 +1158,7 @@ class tegraflashcmds(cmd.Cmd):
                 exports[required_arg] = input('Input ' + required_arg[2:] + ': ')
 
         try:
-            tegraflash_update_rpmb(exports)
+            self.chip_inst.tegraflash_update_rpmb(exports)
         except tegraflash_exception as e:
             print('Error: '+ e.value)
 
@@ -1165,16 +1218,17 @@ def tegraflash_update_env():
 
 if __name__ == '__main__':
     options = ["skipuid", "bct=", "bct_cold_boot=", "cfg=", "bl=", "hostbin=", "cmd=", "key=", "encrypt_key=","instance=",
-               "out=", "chip=", "dtb=", "bldtb=", "kerneldtb=", "bpfdtb=", "nct=", "applet=", "fb=", "odmdata=",
-               "lnx=", "tos=", "eks=", "boardconfig=", "securedev", "keyindex=", "wb=", "keep", "ignorebfs", "secureboot",
+               "out=", "chip=", "dtb=", "bldtb=", "kerneldtb=", "bpfdtb=", "nct=", "applet=", "fb=", "odmdata=", "overlay_dtb=",
+               "lnx=", "tos=", "eks=", "boardconfig=", "securedev", "keyindex=", "wb=", "keep", "secureboot",
                "bl-load=", "bins=", "dev_params=", "sdram_config=", "ramcode=", "misc_config=", "misc_cold_boot_config=",
-               "mb1_bct=", "pinmux_config=", "scr_config=", "scr_cold_boot_config=", "pmc_config=",
-               "pmic_config=", "gpioint_config=", "uphy_config=", "br_cmd_config=",
+               "mb1_bct=", "mb2_bct=", "mb2_cold_boot_bct=", "mb2bct_cfg=",
+               "pinmux_config=", "scr_config=", "scr_cold_boot_config=",
+               "pmc_config=", "pmic_config=", "gpioint_config=", "uphy_config=", "br_cmd_config=",
                "prod_config=", "device_config=", "applet-cpu=", "bpf=", "skipsanitize",
-               "encrypt_key=", "nv_key=", "nvencrypt_key=", "cl=", "soft_fuses=",
+               "encrypt_key=", "nv_key=", "nvencrypt_key=", "cl=", "soft_fuses=", "cust_info=", "fuse_info=",
                "deviceprod_config=", "rcm_bct=","mem_bct=", "mem_bct_cold_boot=", "mb1_cold_boot_bct=", "wb0sdram_config=",
-               "minratchet_config=", "blversion=", "ratchet_blob=", "output_dir=", "applet_softfuse=",
-               "trim_bpmp_dtb", "external_device"]
+               "minratchet_config=", "blversion=", "output_dir=", "nv_nvratchet=", "nv_oemratchet=", "image_dirs=",
+               "trim_bpmp_dtb", "cpubl=", "concat_cpubl_bldtb", "external_device", "sparseupdate" ]
 
     try:
       opts, args = getopt.getopt(sys.argv[1:], "h", options)
@@ -1199,19 +1253,23 @@ if __name__ == '__main__':
     if '--external_device' in sys.argv[1:]:
         exports['--external_device'] = True
 
+    if '--sparseupdate' in sys.argv[1:]:
+        exports['--sparseupdate'] = True
+
     if '--secureboot' in sys.argv[1:]:
         exports['--secureboot'] = True
-
-    if '--ignorebfs' in sys.argv[1:]:
-        exports['--ignorebfs'] = True
 
     if '--trim_bpmp_dtb' in sys.argv[1:]:
         exports['--trim_bpmp_dtb'] = True
 
+    if '--concat_cpubl_bldtb' in sys.argv[1:]:
+        exports['--concat_cpubl_bldtb'] = True
+
+
     abs_path = ['--bct', '--rcm_bct', '--cfg', '--bl', '--hostbin', '--key', '--encrypt_key', '--out', '--dtb', '--bldtb', '--kerneldtb',
-                '--nct', '--applet', '--fb', '--lnx', '--tos', '--eks', '--wb', '--bpfdtb', '--applet_softfuse',
-                '--boardconfig', '--applet-cpu', '--bpf', '--mb1_bct', '--encrypt_key', '--nvencrypt_key', '--nv_key',
-                '--mem_bct', '--mem_bct_cold_boot', '--mb1_cold_boot_bct', '--wb0sdram_config']
+                '--nct', '--applet', '--fb', '--lnx', '--tos', '--eks', '--wb', '--bpfdtb',
+                '--boardconfig', '--applet-cpu', '--bpf', '--mb1_bct', '--mb2_bct', '--encrypt_key', '--nvencrypt_key', '--nv_key',
+                '--mem_bct', '--mem_bct_cold_boot', '--mb1_cold_boot_bct', '--mb2_cold_boot_bct', '--wb0sdram_config']
     for path in abs_path:
         if exports[path] is not None:
             if os.path.dirname(exports[path]):
@@ -1266,6 +1324,12 @@ if __name__ == '__main__':
         exports['--majorversion'] = blversion[0].strip()
         exports['--minorversion'] = blversion[1].strip()
 
+    # Create a list from a comma separated list of dirctories
+    if (exports['--image_dirs'] is not None):
+        image_dir_list = exports['--image_dirs'].split(",")
+        image_dir_list = [os.path.expanduser(path) for path in image_dir_list]
+        exports['--image_dirs'] = image_dir_list
+
     try:
         os.makedirs(paths['TMP'])
     except OSError as e:
@@ -1287,7 +1351,7 @@ if __name__ == '__main__':
             retries = retries - 1
 
     if exports['--cfg'] is not None:
-        exports['--cfg'] = tegraflash_update_img_path(exports['--cfg'])
+        exports['--cfg'] = tegraflash_update_img_path(exports['--cfg'], exports['--image_dirs'])
 
     try:
         if exports["--cmd"] is None:

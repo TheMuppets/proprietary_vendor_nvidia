@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Copyright (c) 2017-2019, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2017-2018, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -904,6 +904,8 @@ McEccRegion3Cfg0 = 0
 McEccRegion3Bom = 0
 McEccRegion3BomHi = 0
 McEccRegion3Size = 0
+McMtsCarveoutSizeMb = 0
+McMtsCarveoutRegCtrl = 0
 McSidStreamidOverrideConfigPtcr = 0
 McSidStreamidSecurityConfigPtcr = 0
 McSidStreamidOverrideConfigHdar = 0

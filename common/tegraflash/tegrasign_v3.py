@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-# Copyright (c) 2018-2020, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2021, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -10,16 +10,50 @@
 #
 
 import argparse
-import traceback
 from tegrasign_v3_internal import *
 from tegrasign_v3_util import *
 
+parser = {};
 
-def compute_sha(filename, offset, length):
-    do_sha256(filename, offset, length)
+internal = {
+            "--file"   : None,
+            "--getmode": None,
+            "--getmontgomeryvalues" : None,
+            "--key"    : None,
+            "--length" : None,
+            "--list"   : None,
+            "--offset" : None,
+            "--pubkeyhash": None,
+            "--sha"    : None,
+            "--enc"    : None,
+            "--iv"     : None,
+            "--aad"    : None,
+            "--tag"    : None,
+            "--sign"   : None,
+            "--verify" : None,
+            "--verbose": None
+          }
+
+def clear_internal():
+    internal["--file"] = None
+    internal["--getmode"] = None
+    internal["--getmontgomeryvalues"] = None
+    internal["--key"] = None
+    internal["--length"] = None
+    internal["--list"] = None
+    internal["--offset"] = None
+    internal["--pubkeyhash"] = None
+    internal["--sha"] = None
+    internal["--enc"] = None
+    internal["--iv"] = None
+    internal["--aad"] = None
+    internal["--tag"] = None
+    internal["--sign"] = None
+    internal["--verify"] = None
+    internal["--verbose"] = None
+
 
 def print_help():
-    parser = argparse.ArgumentParser()
     parser.print_help()
 
 
@@ -27,43 +61,88 @@ def parse_cmdline(commandLine):
     ''' Parse command-line args. The argument order is important
     '''
     # Parse command-line arguments
+    global parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file",   help="specify a file containing data to be signed")
-    parser.add_argument("--getmode",help="Print mode in file if given else on console", action='append', nargs='?')
-    parser.add_argument("--getmontgomeryvalues", help="Save montgomery values")
-    parser.add_argument("--key",    help="specify a file containing key", nargs='+')
-    parser.add_argument("--length", help="specify the length of the data to be signed or omit to specify the entire data", default=0)
-    parser.add_argument("--list",   help="specify a XML file that contains a list of files to be signed")
-    parser.add_argument("--offset", help="specify the start of the data to be signed", default=0)
-    parser.add_argument("--pubkeyhash", help="specify the file to save public key hash")
-    parser.add_argument("--sha",    help="Compute sha hash for sha256")
-    parser.add_argument("--skip_encryption", help="skip encryption in case of non-zero sbk", action='store_true')
+    parser.add_argument("--file",   help="Specify a file containing data to be signed")
+    parser.add_argument("--getmode",help="Print mode in file if given else on console", action='append', nargs='?', metavar='FILE')
+    parser.add_argument("--getmontgomeryvalues", help="Save montgomery values to file", metavar='FILE')
+    parser.add_argument("--hsm",    help="Invoke HSM-mode call with key type specified: [ |sbk|kek0|fskp_ak|fskp_ek|fskp_kdk|fskp|rsa|eddsa|algo]", nargs='*', metavar='HSM')
+    parser.add_argument("--iv",     help="Specify iv for cipher aescbc, aesgcm by using 'random', file containing IV, or hex string without '0x'.", metavar='IV', default=None)
+    parser.add_argument("--kdf",    help="Perform KDF and encryption. <label=label.bin> <context=context.bin> <kdf_file=kdf.yaml>",  nargs='+', metavar='KDF')
+    parser.add_argument("--key",    help="Specify a file containing key", metavar='FILE')
+    parser.add_argument("--length", help="Specify the length of the data to be signed or omit to specify the entire data", default=0)
+    parser.add_argument("--list",   help="Specify a XML file that contains a list of files to be signed", metavar='FILE',)
+    parser.add_argument("--offset", help="Specify the start of the data to be signed", default=0)
+    parser.add_argument("--pubkeyhash", help="Specify the file to save public key hash", metavar='FILE')
+    parser.add_argument("--sha",    help="Compute sha hash for sha256 or sha512", choices=['sha256', 'sha512'])
+    parser.add_argument("--enc", help="Set encryption, or skip in case of non-zero sbk", choices=[None, 'skip', 'aescbc', 'aesgcm'])
+    parser.add_argument("--aad", help="Specify aad for aesgcm using 'random' or hex string without '0x'", metavar='AAD', default=0)
+    parser.add_argument("--tag", help="Specify tag, hex string without '0x', for aesgcm verification. Use with '--verify'", metavar='TAG', default=0)
+    parser.add_argument("--sign",    help="Sign using aescmac or hmacsha256", choices=['aescmac', 'hmacsha256'])
+    parser.add_argument("--verify", help="Specify the file containing data to be verified. Current support is aesgcm only", metavar='VERIFY', default=0)
     parser.add_argument("--verbose", help="Print verbose information", action='store_true')
 
     # print help if the # of args == 1
-    if not len(commandLine) > 1:
+    if not len(commandLine) > 0:
         print_help()
         return False
 
-    args = parser.parse_args(commandLine[1:])
+    args = parser.parse_args(commandLine)
     return args
 
 '''
 If pkh is filename and not 'None', then the pub key hash file will be generated
 If mont is filename and not 'None', then the montgomery value file will be generated for rsa3k
 '''
-def extract_key(p_key, keyfilename, pkh, mont):
+def extract_key(p_key, keyfilename, internal):
 
-    if keyfilename == 'None' or keyfilename == None:
-        p_key.mode = NvTegraSign_SBK
-        info_print('Assuming zero filled SBK key')
+    pkh = internal["--pubkeyhash"]
+    mont = internal["--getmontgomeryvalues"]
+
+    # Handles 'None' first
+    if keyfilename == 'None':
+        if (p_key.hsm.type == KeyType.FSKP):
+            p_key.mode = NvTegraSign_FSKP
+            p_key.key.aeskey = bytearray(16) # not supporting 32B
+            info_print('Assuming zero filled SBK key')
+        else:
+            p_key.mode = NvTegraSign_SBK
+            p_key.key.aeskey = bytearray(16)
+            info_print('Assuming zero filled SBK key')
+        p_key.filename = keyfilename
         return 1
+    # Handle HSM route next
+    elif p_key.hsm.type != KeyType.UNKNOWN:
+        p_key.filename = keyfilename
 
-    else :
+        if p_key.hsm.type in [KeyType.SBK, KeyType.KEK0]:
+            p_key.mode = NvTegraSign_SBK
+            return 1
+
+        elif p_key.hsm.is_fskp_mode():
+            p_key.mode = NvTegraSign_FSKP
+            return 1
+
+        elif is_PKC_key(keyfilename, p_key, pkh, mont) is True:
+           p_key.mode = NvTegraSign_PKC
+           return 1
+
+        # Note: HSM for ECC does not exist, so native route is used
+        if is_ECC_key(keyfilename, p_key, pkh) is True:
+           p_key.mode = NvTegraSign_ECC
+           return 1
+
+        elif is_ED25519_key(keyfilename, p_key, pkh) is True:
+           p_key.mode = NvTegraSign_ED25519
+           return 1
+
+    else:
         try:
             key_fh = open(keyfilename, 'rb')
             key_buf = key_fh.read()
             BufSize = len(key_buf)
+            p_key.filename = keyfilename
+            key_fh.close()
 
         except IOError:
             p_key.mode = NvTegraSign_SBK
@@ -86,6 +165,11 @@ def extract_key(p_key, keyfilename, pkh, mont):
 
         if is_ED25519_key(keyfilename, p_key, pkh) is True:
            p_key.mode = NvTegraSign_ED25519
+           p_key.filename = keyfilename
+           return 1
+
+        if is_xmss_key(keyfilename, p_key, pkh) is True:
+           p_key.mode = NvTegraSign_XMSS
            p_key.filename = keyfilename
            return 1
 
@@ -118,14 +202,11 @@ Since the public key hash file is created in do_rsa_pss/do_ecc() or is_pkc/ecc()
 Here we only check for file existance and prints warning if not found
 '''
 def save_public_key_hash(p_key, filename):
-    if (p_key.mode == NvTegraSign_PKC):
-        if check_file(filename):
+    if check_file(filename):
+        if p_key.mode == NvTegraSign_PKC:
             info_print('Saving pkc public key in ' + filename)
-
-    elif (p_key.mode == NvTegraSign_ECC or p_key.mode == NvTegraSign_ED25519):
-        if check_file(filename):
-            info_print('Saving public key in ' + filename)
-
+        else:
+            info_print('Saving public key in ' + filename + ' for ' + p_key.mode)
 
 '''
 Since the montgomery values file is created in do_rsa_pss()
@@ -139,134 +220,275 @@ def save_montgomery_values(p_key, filename):
 '''
 Print the arguments if the invocation is not done by standalone
 '''
-def print_args(file_val, mode_val, mont_val, key_val, len_val, list_val, \
-        offset_val, pkh_val, sha_val, skip_enc_val):
+def print_args(internal):
 
     if __name__=='__main__':
         return
 
     try:
-        str = 'tegrasign_v3.py'
-        if file_val:
-            str += ' --file ' + file_val
-        if mode_val:
-            # check to see if it's a list
-            if isinstance(mode_val, list):
-                if mode_val[0]:
-                    str += ' --getmode ' + mode_val[0]
-                else:
-                    str += ' --getmode'
+        argstr = 'tegrasign_v3.py'
+        if internal["--aad"] != 0:
+            argstr += ' --aad ' + internal["--aad"]
+        if internal["--enc"]:
+            argstr += ' --enc ' + internal["--enc"]
+        if internal["--iv"] != 0:
+            argstr += ' --iv ' + internal["--iv"]
+        if internal["--file"]:
+            argstr += ' --file ' + internal["--file"]
+        if internal["--key"]:
+            if isinstance(internal["--key"], list):
+                argstr += ' --key ' + ' '.join(internal["--key"])
             else:
-                str += ' --getmode ' + mode_val
-        if mont_val:
-            str += ' --getmontgomeryvalues ' + mont_val
-        if key_val:
-            if isinstance(key_val, list):
-                str += ' --key ' + ' '.join(key_val)
-            else:
-                str += ' --key ' + key_val
-        if len_val:
-            str += ' --length ' + len_val
-        if list_val:
-            str += ' --list ' + list_val
-        if offset_val:
-            str += ' --offset ' + offset_val
-        if pkh_val:
-            str += ' --pubkeyhash ' + pkh_val
-        if sha_val:
-            str += ' --sha ' + sha_val
-        if skip_enc_val:
-            str += ' --skip_encryption'
+                argstr += ' --key ' + internal["--key"]
+        if internal["--length"]:
+            argstr += ' --length ' + internal["--length"]
+        if internal["--list"]:
+            argstr += ' --list ' + internal["--list"]
 
-        info_print(str)
+        if internal["--getmode"]:
+            # check to see if it's a list
+            if isinstance(internal["--getmode"], list):
+                if internal["--getmode"][0]:
+                    argstr += ' --getmode ' + internal["--getmode"][0]
+                else:
+                    argstr += ' --getmode '
+            else:
+                argstr += ' --getmode ' + internal["--getmode"]
+        if internal["--getmontgomeryvalues"]:
+            argstr += ' --getmontgomeryvalues ' + internal["--getmontgomeryvalues"]
+        if internal["--offset"]:
+            argstr += ' --offset ' + internal["--offset"]
+        if internal["--pubkeyhash"]:
+            argstr += ' --pubkeyhash ' + internal["--pubkeyhash"]
+        if internal["--sha"]:
+            argstr += ' --sha ' + internal["--sha"]
+        if internal["--sign"] != None:
+            argstr += ' --sign ' + internal["--sign"]
+        if internal["--tag"] != 0:
+            argstr += ' --tag ' + internal["--tag"]
+        if internal["--verify"] != 0:
+            argstr += ' --verify ' + internal["--verify"]
+        info_print(argstr)
 
     except Exception as e:
-        info_print('Encounter exception when printing argument list:' + e.message)
+        info_print('Encounter exception when printing argument list')
+        info_print(e.message)
 
-def tegrasign(args_file, args_getmode, args_getmont, args_key, args_length, args_list, args_offset, args_pubkeyhash, args_sha, args_skip_enc, args_verbose=False):
+def tegrasign(args_file, args_getmode, args_getmont, args_key, args_length, args_list, args_offset, args_pubkeyhash, args_sha, args_enc, args_verbose=False, args_iv=0, args_aad=0, args_tag=0, args_sign=None, args_verify=0, args_kdf=None, args_hsm=None):
 
-    print_args(args_file, args_getmode, args_getmont, args_key, args_length, args_list, args_offset, args_pubkeyhash, args_sha, args_skip_enc)
+    internal["--file"] = args_file
+    internal["--getmode"] = args_getmode
+    internal["--getmontgomeryvalues"] = args_getmont
+    internal["--key"] = args_key
+    internal["--length"] = args_length
+    internal["--list"] = args_list
+    internal["--offset"] = args_offset
+    internal["--pubkeyhash"] = args_pubkeyhash
+    internal["--sha"] = args_sha
+    internal["--enc"] = args_enc
+    internal["--iv"] = args_iv
+    internal["--aad"] = args_aad
+    internal["--tag"] = args_tag
+    internal["--sign"] = args_sign
+    internal["--verify"] = args_verify
+    internal["--verbose"] = args_verbose
+    internal["--kdf"] = args_kdf
+    internal["--hsm"] = args_hsm
 
-    set_env(__name__=='__main__', args_verbose)
+    print_args(internal)
+
+    set_env(__name__=='__main__', args_verbose, args_hsm != None, None)
 
     try:
-        if args_key:
+        is_kdf_file = (internal["--kdf"] != None) and ('kdf_file' in ''.join(internal["--kdf"]).lower())
+
+        if internal["--key"] or internal["--hsm"] or is_kdf_file:
             is_key_list = True
 
-            if isinstance(args_key, list):
-                keyfile_count = len(args_key)
+            if isinstance(internal["--key"], list):
+                keyfile_count = len(internal["--key"])
             else:
                 is_key_list = False
                 keyfile_count = 1
 
             # Check key count
             if (keyfile_count > MAX_KEY_LIST):
-                info_print('--key has ' + str(len(args_key)) + ' arguments which exceeds ' + str(MAX_KEY_LIST))
-                exit_routine()
+                info_print('--key has ' + str(len(internal["--key"])) + ' arguments which exceeds ' + str(MAX_KEY_LIST))
+                return exit_routine()
 
             p_keylist = [ SignKey() for i in range(keyfile_count)]
 
             # Extract each key only if it is in a list
             if is_key_list:
                 for i in range(keyfile_count):
-                    if extract_key(p_keylist[i], args_key[i], args_pubkeyhash, args_getmont) == 0:
-                        exit_routine()
+                    if extract_key(p_keylist[i], internal["--key"][i], internal) == 0:
+                        return exit_routine()
             else:
-                if extract_key(p_keylist[0], args_key, args_pubkeyhash, args_getmont) == 0:
-                    exit_routine()
+                if internal["--hsm"]:
+                    # Set the hsm type before extracting keys
+                    p_keylist[0].parse_hsm(internal["--hsm"], KeyType.HSM)
+                if internal["--kdf"]:
+                    p_keylist[0].kdf.parse(p_keylist[0], internal)
+                if not is_kdf_file and (extract_key(p_keylist[0], internal["--key"], internal) == 0):
+                    return exit_routine()
+
+                if not internal["--hsm"]:
+                    # After extracting key, set the key types that have --key provided
+                    p_keylist[0].parse_hsm(internal["--hsm"], p_keylist[0].mode)
+                    if args_key and (p_keylist[0].hsm.type != KeyType.HSM):
+                        # It is possible that the right keytype is found, but not with the intended key path, under HSM mode
+                        # so it is best that we extract again with right key path to obtain correct info before moving on
+                        if extract_key(p_keylist[0], internal["--key"], internal) == 0:
+                            return exit_routine()
+                p_keylist[0].validate_hsmmode()
 
             # Check key mode is the same for all keys
             for i in range(1, keyfile_count):
                 if p_keylist[i].mode != p_keylist[i-1].mode:
-                    info_print('key[' + str(i) + '].mode = ' + p_keylist[i].mode + ' which does not match key['+ str(i-1) + '].mode = ' + p_keylist[i-1].mode)
-                    exit_routine()
+                    raise tegrasign_exception('key[' + str(i) + '].mode = ' + p_keylist[i].mode + ' which does not match key[' \
+                        + str(i-1) + '].mode = ' + p_keylist[i-1].mode)
 
-            if args_getmode:
-                get_mode(args_getmode, p_keylist[0])
+            if internal["--getmode"]:
+                get_mode(internal["--getmode"], p_keylist[0])
 
-            if args_list:
-                sign_files_in_list(p_keylist, args_list, args_pubkeyhash, args_getmont)
+            if internal["--sha"]:
+                # Change to boolean for passing into API
+                if internal["--sha"] == 'sha512':
+                    internal["--sha"] = Sha._512
+                else:
+                    internal["--sha"] = Sha._256
+            else:
+                # Set Sha256 as the default mode
+                internal["--sha"] = Sha._256
 
-            elif args_file:
+            if (type(internal["--iv"]) == str):
+                if (internal["--iv"] == 'random'):
+                    internal["--iv"] = random_gen(16);
+                    info_print("--iv %s" %(hex_to_str(internal["--iv"])))
+                    # Store the iv to file
+                    if internal["--file"]:
+                        iv_file = os.path.splitext(internal["--file"])[0] + '.iv'
+                    else:
+                        iv_file = 'random.iv'
+                    iv_fh = open_file(iv_file, 'wb')
+                    if iv_fh:
+                        write_file(iv_fh, bytes(internal["--iv"]))
+                        iv_fh.close()
+                        p_keylist[0].kdf.iv.read(iv_file, ReadFlag.IGNORE)
+                    else:
+                        info_print('Cannot open %s for writing' %(iv_file))
+                        return exit_routine()
+                elif os.path.exists(internal["--iv"]):
+                    # Assume passing in iv in file
+                    p_keylist[0].kdf.iv.read(internal["--iv"], ReadFlag.IGNORE)
+                    iv_fh = open_file(internal["--iv"], 'rb')
+                    internal["--iv"] = iv_fh.read()
+                    iv_fh.close()
+                else:
+                    temp = str_to_hex(internal["--iv"])
+                    internal["--iv"] = bytearray(temp) #convert str to bytearray
+                    p_keylist[0].kdf.iv.set_buf(internal["--iv"])
+
+            if (type(internal["--aad"]) == str):
+                if (internal["--aad"] == 'random'):
+                    internal["--aad"] = random_gen(16);
+                    info_print("--aad %s" %(binascii.hexlify(internal["--aad"])))
+                else:
+                    temp = str_to_hex(internal["--aad"])
+                    internal["--aad"] = bytearray(temp) #convert str to bytearray
+                p_keylist[0].kdf.aad.set_buf(internal["--aad"])
+
+            if (type(internal["--tag"]) == str):
+                temp = str_to_hex(internal["--tag"])
+                internal["--tag"] = bytearray(temp) #convert str to bytearray
+            elif (type(args_tag) == int):
+                internal["--tag"] = bytearray(16)
+            p_keylist[0].kdf.tag.set_buf(internal["--tag"])
+            if internal["--verify"] != 0:
+                p_keylist[0].kdf.verify = internal["--verify"]
+
+            if internal["--list"]:
+                # This shall generate signatures and update input xml list.
+                retVal = sign_files_in_list(p_keylist, internal)
+                if retVal !=0:
+                    return retVal
+
+            elif internal["--file"]:
                 length = -1
                 offset = 0
-                skip_enc = 0
-                do_sign = True
+                if (internal["--sign"] == None):
+                    internal["--sign"] = 'aescmac'
+                    if (internal["--enc"] == None):
+                        internal["--enc"] = 'aescbc' #set as default only if mac is not defined
 
-                if args_length:
-                    length = int(args_length)
 
-                if args_offset:
-                    offset = int(args_offset)
+                if internal["--length"]:
+                    length = int(internal["--length"])
 
-                if args_skip_enc:
-                    skip_enc = 1
+                if internal["--offset"]:
+                    offset = int(internal["--offset"])
+                internal["--length"] = length
+                internal["--offset"] = offset
 
-                sign_single_file(p_keylist[0], args_file, offset, length, skip_enc, do_sign, args_pubkeyhash, args_getmont)
+                p_keylist[0].parse(internal["--file"], internal["--length"], internal["--offset"])
 
-            #else:
-            #    print_help()
+                if internal["--kdf"]:
+                    kdf_arg_len = len(internal["--kdf"])
+                    if (kdf_arg_len == 1):
+                        # kdf_list = [iv1, aad1, tag1, src, DerKey.DEV, der_str, ver, psc_bl, psc_fw]
+                        with open(p_keylist[0].src_file, 'rb') as f:
+                            org_src = bytearray(f.read())
+                            src = org_src[p_keylist[0].off:p_keylist[0].off+p_keylist[0].len]
 
-            if args_pubkeyhash:
-                save_public_key_hash(p_keylist[0], args_pubkeyhash)
+                        kdf_list = [p_keylist[0].kdf.iv.get_hexbuf(), p_keylist[0].kdf.aad.get_hexbuf(), p_keylist[0].kdf.tag.get_hexbuf(), \
+                                    src, p_keylist[0].kdf.flag, p_keylist[0].kdf.label.get_hexbuf(), p_keylist[0].kdf.context.get_hexbuf(), \
+                                    p_keylist[0].kdf.bl_label.get_hexbuf(), p_keylist[0].kdf.fw_label.get_hexbuf()]
+                        if (do_key_derivation(internal["--file"], kdf_list, p_keylist[0].kdf.chipid, p_keylist[0].kdf.magicid) != True):
+                            return exit_routine()
+                        fileNm, fileExt = os.path.splitext(p_keylist[0].src_file)
+                        enc_file = fileNm + '_encrypt' + fileExt
+                        tag_file = fileNm + '.tag'
+                        with open(tag_file, 'wb') as f:
+                            f.write(kdf_list[KdfArg.TAG][:])
+                        with open(enc_file, 'wb') as f:
+                            org_src[p_keylist[0].off:p_keylist[0].off+p_keylist[0].len] = kdf_list[KdfArg.SRC][:]
+                            f.write(org_src)
+                            return True
 
-            if args_getmont:
-                save_montgomery_values(p_keylist[0], args_getmont)
+                    elif (kdf_arg_len == 2):
+                        if internal["--enc"] == 'aesgcm':
+                            return do_derive_aesgcm(p_keylist[0], internal)
+                        elif internal["--sign"] == 'hmacsha256':
+                            return do_derive_hmacsha(p_keylist[0])
+                        return do_derive_cbc(p_keylist[0])
+                else:
+                    retVal = sign_single_file(p_keylist[0], internal)
+                    if retVal !=0:
+                        return retVal
+
+
+            if internal["--pubkeyhash"]:
+                save_public_key_hash(p_keylist[0], internal["--pubkeyhash"])
+
+            if internal["--getmontgomeryvalues"]:
+                save_montgomery_values(p_keylist[0], internal["--getmontgomeryvalues"])
 
         else:
-            if args_sha == 'sha256':
+            if internal["--sha"] in ['sha256', 'sha512']:
                 length = -1
                 offset = 0
-                skip_enc = 0
 
-                if args_length:
-                    length = int(args_length)
+                if internal["--length"]:
+                    length = int(internal["--length"])
 
-                if args_offset:
-                    offset = int(args_offset)
+                if internal["--offset"]:
+                    offset = int(internal["--offset"])
 
-                if args_file:
-                    compute_sha(args_file, offset, length)
+                internal["--length"] = length
+                internal["--offset"] = offset
+
+                if internal["--file"]:
+                    compute_sha(internal["--sha"], internal["--file"], internal["--offset"], internal["--length"])
                 else:
                     print_help()
 
@@ -276,9 +498,19 @@ def tegrasign(args_file, args_getmode, args_getmont, args_key, args_length, args
         # but if we got here it is a success return 0
         return 0
     except Exception as e:
-        print(traceback.format_exc())
-        info_print('Encounter exception when signing: ' + str(e))
-        exit_routine()
+        info_print(traceback.format_exc())
+        info_print('Encounter exception when signing')
+        info_print(e)
+        return exit_routine()
+
+def main(commandLineArgs):
+    args = parse_cmdline(commandLineArgs)
+
+    if not args is False:
+        retVal = tegrasign(args.file, args.getmode, args.getmontgomeryvalues, args.key, args.length,
+            args.list, args.offset, args.pubkeyhash, args.sha, args.enc, args.verbose, args.iv, args.aad, args.tag, args.sign, args.verify, args.kdf, args.hsm)
+        return retVal
+    return 1
 
 '''
 Argument List Order:
@@ -291,12 +523,8 @@ Argument List Order:
 --offset
 --pubkeyhash
 --sha
---skip_encryption
+--enc
 --verbose : optional, this is not enabled from tegraflash, standalone can be enabled
 '''
 if __name__=='__main__':
-
-    args = parse_cmdline(sys.argv)
-
-    if not args is False:
-        tegrasign(args.file, args.getmode, args.getmontgomeryvalues, args.key, args.length, args.list, args.offset, args.pubkeyhash, args.sha, args.skip_encryption, args.verbose)
+    main(sys.argv[1:])

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014-2021, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2014-2022, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -10,17 +10,27 @@
 
 from __future__ import print_function
 
-import subprocess
-import os.path
-import time
-import sys
-import shutil
+import binascii
 import math
-from xml.etree import ElementTree
-import struct
-import tempfile
+import os.path
 import re
-from tegrasign_v3 import *
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+import collections
+import uuid
+
+from xml.etree import ElementTree
+
+from tegrasign_v3 import (compute_sha, do_key_derivation,
+                          tegrasign)
+from tegrasign_v3_util import DerKey, KdfArg, set_env
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "pyfdt"))
+import pyfdt
 
 try:
     track_py_file = True
@@ -41,14 +51,14 @@ tegrarcm_values = { '--list':'rcm_list.xml', '--signed_list':'rcm_list_signed.xm
                     '--chip_info':'chip_info.bin', '--rollback_data':'rollback_data.bin',
                     '--fuse_info': 'blow_fuse_data.bin', '--read_fuse':'read_fuse.bin',
                     '--get_fuse_names': 'read_fuse_names.txt',
-                    '--rcm_1_signed':'rcm_1_signed.rcm',
                   }
-tegrabct_values = { '--bct':None, '--bct_cold_boot':None, '--list':'bct_list.xml', '--signed_list':'bct_list_signed.xml', '--mb1_bct':None, '--mb1_cold_boot_bct':None, '--membct_cold_boot': None, '--membct_rcm' : None, '--rcm_bct': None, '--updated': False }
+tegrabct_values = { '--bct':None, '--bct_cold_boot':None, '--list':'bct_list.xml', '--signed_list':'bct_list_signed.xml', '--mb1_bct':None, '--mb1_cold_boot_bct':None,
+        '--mb2_bct':None, '--mb2_cold_boot_bct':None, '--membct_cold_boot': None, '--membct_rcm' : None, '--rcm_bct': None, '--updated': False }
 tegrasign_values = { '--pubkeyhash':'pub_key.key', '--mode':'None', '--getmontgomeryvalues': 'montgomery.bin'}
 tegraparser_values = { '--pt':None, '--ufs_otp':'ufs_otp_data.bin'}
 tegrahost_values = { '--list':'images_list.xml', '--signed_list':'images_list_signed.xml', '--ratchet_blob':'ratchet_blob.bin'}
 
-tegraflash_binaries_v2 = { 'tegrabct':'tegrabct_v2', 'tegrahost':'tegrahost_v2', 'tegrasign':'tegrasign_v3.py', 'tegrarcm':'tegrarcm_v2', 'tegradevflash':'tegradevflash_v2', 'tegraparser':'tegraparser_v2', 'dtc':'dtc'}
+tegraflash_binaries_v2 = { 'tegrabct':'tegrabct_v2', 'tegrahost':'tegrahost_v2', 'tegrasign':'tegrasign_v3.py', 'tegrarcm':'tegrarcm_v2', 'tegradevflash':'tegradevflash_v2', 'tegraparser':'tegraparser_v2', 'dtc':'dtc', 'cpp':'cpp'}
 
 tegraflash_binaries = { 'tegrabct':'tegrabct', 'tegrahost':'tegrahost', 'tegrasign':'tegrasign', 'tegrarcm':'tegrarcm', 'tegradevflash':'tegradevflash', 'tegraparser':'tegraparser', 'dtc':'dtc'}
 
@@ -187,6 +197,12 @@ def print_process(process, capture_log = False) :
 
     return log
 
+# Strip all items in a string list and delete empty items.
+def strip_string_list(str_list):
+    ret_list = [val.strip() for val in str_list]
+    ret_list = [val for val in ret_list if val]
+    return ret_list
+
 def run_command(cmd, enable_print=True):
     log = ''
     if enable_print == True:
@@ -200,12 +216,74 @@ def run_command(cmd, enable_print=True):
 
     if enable_print == True:
         log = print_process(process, enable_print)
-    return_code = process.wait()
+    else:
+        # wait for process to terminate
+        process.communicate()
+
+    # get the return code
+    return_code = process.returncode
 
     if return_code != 0:
         raise tegraflash_exception('Return value ' + str(return_code) +
                 '\nCommand ' + ' '.join(cmd))
     return log
+
+def run_cpp_tool(input_file):
+    """ Run cpp tool on input DTS file and produce preprocessed DTS file
+    """
+
+    # run cpp tool to process any c header includes in DTS
+    command = exec_file("cpp")
+    command.extend(["-nostdinc"])
+    command.extend(["-x", "assembler-with-cpp"])
+    command.extend([input_file])
+
+    output = run_command(command, False)
+
+    # Save output of the command to the config file
+    with open(input_file, 'w') as out_file:
+        out_file.write(output)
+
+    return input_file
+
+def run_dtc_tool(input_file):
+    """ Run dtc tool on input DTS file and produce DTB output file
+    """
+
+    # get the filename without extension
+    file_name, ext = os.path.splitext(input_file)
+    dtb_file_name = file_name + ".dtb"
+
+    # run cpp tool to process any c header includes in DTS
+    command = exec_file("dtc")
+    command.extend(["-I", "dts"])
+    command.extend(["-O", "dtb"])
+    command.extend(["-o", dtb_file_name])
+    command.extend([input_file])
+
+    run_command(command, False)
+
+    return dtb_file_name
+
+def tegraflash_preprocess_configs():
+    """ Preprocess BCT configuration files using cpp and dtc tools
+        if they are in DTS format
+    """
+
+    # Gather all the configs in a list
+    configs_list = ['--sdram_config', '--wb0sdram_config', '--misc_config', '--pmc_config', \
+                    '--pinmux_config', '--gpioint_config', '--uphy_config', '--scr_config', \
+                    '--pmic_config', '--br_cmd_config', '--prod_config', '--device_config', \
+                    '--deviceprod_config', '--scr_cold_boot_config', '--misc_cold_boot_config']
+
+    for config in configs_list:
+        if values[config] is not None:
+            config_types = [".dts"]
+            if any(cf_type in values[config] for cf_type in config_types):
+                info_print('Pre-processing config: ' + values[config])
+                values[config] = run_cpp_tool(values[config])
+                values[config] = run_dtc_tool(values[config])
+
 
 def tegraflash_mkdevimages(args, cmd_args):
     global start_time
@@ -222,8 +300,23 @@ def tegraflash_mkdevimages(args, cmd_args):
 
     tegraflash_get_key_mode()
     tegraflash_parse_partitionlayout()
-    tegraflash_sign_images()
-    tegraflash_generate_bct()
+
+    # Set bct flag to True if bct generation is required
+    # BCT flag needs to be passed to tegraflash_sign_images
+    # function because it generated BR-BCT before signing
+    # MB1 image
+    bct_flag = False if "nobct" in cmd_args else True
+    tegraflash_sign_images(bct_flag=bct_flag)
+
+    # if nobct is specified in the command argument
+    # skip bct generation
+    if (bct_flag):
+        tegraflash_generate_bct()
+    else:
+        # Here nobct needs to be removed from the cmd_args
+        # since tegradevflash doesn't require it
+        cmd_args.remove("nobct")
+
     tegraflash_update_images()
     tegraflash_generate_devimages(cmd_args)
     info_print('Storage images generated\n')
@@ -259,6 +352,7 @@ def tegraflash_flash(args):
         return 1
 
     tegraflash_get_key_mode()
+    tegraflash_preprocess_configs()
     tegraflash_generate_rcm_message()
     tegraflash_parse_partitionlayout()
     tegraflash_trim_bpmp_fw_dtb()
@@ -280,6 +374,8 @@ def tegraflash_rcmbl(args):
     global start_time
     start_time = time.time()
     values.update(args)
+
+    tegraflash_preprocess_configs()
 
     if values['--chip'] is None:
         print('Error: chip is not specified')
@@ -328,6 +424,7 @@ def tegraflash_rcmboot(args):
     start_time = time.time()
     values.update(args)
 
+    tegraflash_preprocess_configs()
 
     if values['--bl'] is None:
         print('Error: Command line bootloader is not specified')
@@ -398,6 +495,8 @@ def tegraflash_secureflash(args):
 
 def tegraflash_read(args, partition_name, filename):
     values.update(args)
+
+    tegraflash_preprocess_configs()
 
     if int(values['--chip'], 0) != 0x19 and values['--bl'] is None:
         print('Error: Command line bootloader is not specified')
@@ -480,6 +579,8 @@ def tegraflash_signwrite(args, partition_name, file_path):
 def tegraflash_write(args, partition_name, filename):
     values.update(args)
 
+    tegraflash_preprocess_configs()
+
     if int(values['--chip'], 0) != 0x19 and values['--bl'] is None:
         print('Error: Command line bootloader is not specified')
         return 1
@@ -507,7 +608,11 @@ def tegraflash_write(args, partition_name, filename):
             tegraflash_parse_partitionlayout()
             tegraflash_sign_images(False)
 
-        if values['--bct'] is None:
+        if int(values['--chip'], 0) == 0x19:
+            tegraflash_generate_bct()
+            info_print('Send BCT from Host')
+            tegraflash_send_bct()
+        elif values['--bct'] is None:
             info_print('Reading BCT from device for further operations')
         else:
             info_print('Send BCT from Host')
@@ -537,6 +642,8 @@ def tegraflash_write(args, partition_name, filename):
 
 def tegraflash_ccgupdate(args, filename1, filename2):
     values.update(args)
+
+    tegraflash_preprocess_configs()
 
     if values['--bl'] is None:
         print('Error: Command line bootloader is not specified')
@@ -591,6 +698,8 @@ def tegraflash_get_req_info():
 def tegraflash_erase(args, partition_name):
     values.update(args)
 
+    tegraflash_preprocess_configs()
+
     if values['--bl'] is None:
         print('Error: Command line bootloader is not specified')
         return 1
@@ -629,6 +738,8 @@ def tegraflash_erase(args, partition_name):
 def tegraflash_setverify(args, partition_name):
     values.update(args)
 
+    tegraflash_preprocess_configs()
+
     if values['--bl'] is None:
         raise tegraflash_exception("Command line bootloader not specified")
 
@@ -661,6 +772,8 @@ def tegraflash_setverify(args, partition_name):
 
 def tegraflash_test(args, test_args):
     values.update(args)
+
+    tegraflash_preprocess_configs()
 
     if values['--securedev']:
         tegraflash_send_tboot(args['--applet'])
@@ -889,17 +1002,9 @@ def tegraflash_encrypt_and_sign(exports):
     tegraflash_generate_rcm_message()
 
     if values['--cfg'] is not None :
-        if int(values['--chip'], 0) == 0x19:
-            output_dir = tegraflash_abs_path('encrypted_signed_t19x')
-            tegraflash_t19x_encrypt_and_sign(values['--cfg'])
-        else:
-            tegraflash_parse_partitionlayout()
-            tegraflash_encrypt_images(False)
-            tegraflash_generate_bct()
-            tegraflash_fill_mb1_storage_info()
-            tegraflash_parse_partitionlayout()
-            tegraflash_encrypt_images(False)
-            tegraflash_update_images()
+        tegraflash_parse_partitionlayout()
+        tegraflash_encrypt_images(False)
+        tegraflash_update_images()
 
     if values['--bins'] is not None:
         bins = values['--bins'].split(';')
@@ -911,15 +1016,14 @@ def tegraflash_encrypt_and_sign(exports):
                 raise tegraflash_exception('invalid format ' + binary)
 
             if tags[0] in images_to_sign:
-                magic_id = tegraflash_get_magicid(tags[0])
-                tags[1] = tegraflash_oem_encrypt_and_sign_file(tags[1], True, magic_id);
-                tags[1] = tegraflash_oem_encrypt_and_sign_file(tags[1], False,magic_id);
+                tags[1] = tegraflash_oem_encrypt_and_sign_file(tags[1], True);
+                tags[1] = tegraflash_oem_encrypt_and_sign_file(tags[1], False);
 
             binaries.extend([tags[1]])
 
     if values['--tegraflash_v2'] and values['--bl']:
-        values['--bl'] = tegraflash_oem_encrypt_and_sign_file(values['--bl'], True,'CPBL')
-        values['--bl'] = tegraflash_oem_encrypt_and_sign_file(values['--bl'], False,'CPBL')
+        values['--bl'] = tegraflash_oem_encrypt_and_sign_file(values['--bl'], True)
+        values['--bl'] = tegraflash_oem_encrypt_and_sign_file(values['--bl'], False)
         binaries.extend([values['--bl']])
 
     if not os.path.exists(output_dir):
@@ -928,27 +1032,16 @@ def tegraflash_encrypt_and_sign(exports):
     info_print("Copying signed file in " + output_dir)
     signed_files.extend(tegraflash_copy_signed_binaries(tegrarcm_values['--signed_list'], output_dir))
 
-    if values['--cfg'] is not None and  int(values['--chip'], 0) != 0x19:
+    if values['--cfg'] is not None :
         signed_files.extend(tegraflash_encrypt_and_copy_signed_binaries(tegrahost_values['--signed_list'], output_dir))
         tegraflash_update_cfg_file(signed_files, cfg_file, output_dir)
         tegraflash_update_enc_cfg_file(signed_files, cfg_file, temp_cfg_file)
         values['--cfg'] = temp_cfg_file
         tegraflash_parse_partitionlayout()
-        tegraflash_generate_bct()
-        tegraflash_fill_mb1_storage_info()
         tegraflash_encrypt_images(True)
         tegraflash_update_images()
         signed_files.extend(tegraflash_encrypt_and_copy_signed_binaries(tegrahost_values['--signed_list'], output_dir))
-        tegraflash_generate_bct()
-        tegraflash_update_images()
         tegraflash_update_cfg_file(signed_files, cfg_file, output_dir)
-        if tegrabct_values['--bct'] is not None:
-            shutil.copyfile(tegrabct_values['--bct'], output_dir + "/" + tegrabct_values['--bct'])
-        elif not values['--external_device']:
-            raise tegraflash_exception("Unable to find bct file")
-
-    else:
-        tegraflash_fill_mb1_storage_info()
         tegraflash_generate_bct()
         if tegrabct_values['--bct'] is not None:
             shutil.copyfile(tegrabct_values['--bct'], output_dir + "/" + tegrabct_values['--bct'])
@@ -960,21 +1053,8 @@ def tegraflash_encrypt_and_sign(exports):
     if tegrabct_values['--mb1_cold_boot_bct'] is not None:
         shutil.copyfile(tegrabct_values['--mb1_cold_boot_bct'], output_dir + "/" + tegrabct_values['--mb1_cold_boot_bct'])
 
-    if tegrabct_values['--membct_rcm'] is not None:
-        shutil.copyfile(tegrabct_values['--membct_rcm'], output_dir + "/" + tegrabct_values['--membct_rcm'])
-    if tegrabct_values['--membct_cold_boot'] is not None:
-        shutil.copyfile(tegrabct_values['--membct_cold_boot'], output_dir + "/" + tegrabct_values['--membct_cold_boot'])
     for signed_binary in binaries:
-        info_print(signed_binary)
         shutil.copyfile(signed_binary, output_dir + "/" + signed_binary)
-
-    if os.path.isfile('mb1_t194_dev_sigheader.bin.encrypt'):
-        mb1_file = tegraflash_oem_encrypt_and_sign_file('mb1_t194_dev_sigheader.bin.encrypt', False, "MB1B")
-        shutil.copyfile(mb1_file, output_dir + "/" + mb1_file )
-
-    if os.path.isfile('mb1_t194_prod_sigheader.bin.encrypt'):
-        mb1_file = tegraflash_oem_encrypt_and_sign_file('mb1_t194_prod_sigheader.bin.encrypt', False, "MB1B")
-        shutil.copyfile(mb1_file, output_dir + "/" + mb1_file )
 
     # Generate index file when encrypt and sign images
     if int(values['--chip'], 0) == 0x18 or int(values['--chip'], 0) == 0x19:
@@ -995,19 +1075,18 @@ def tegraflash_encrypt_and_sign(exports):
             shutil.copyfile(original_cfg, new_cfg_file)
         if os.path.exists(new_cfg_file):
             tegraflash_update_cfg_file(signed_files, new_cfg_file, output_dir, only_generated=True)
-            tegraflash_generate_index_file(new_cfg_file, flash_index)
+            tegraflash_generate_index_file(new_cfg_file, flash_index, tegraparser_values['--pt'])
             shutil.copyfile(flash_index, output_dir + "/" + flash_index)
         else:
             info_print("Failed to find flash.xml.tmp. Skip generating flash index file for now.")
 
 
-def tegraflash_generate_index_file(cfg_file, index_file_location):
+def tegraflash_generate_index_file(cfg_file, index_file_location, partition_file):
     command = exec_file('tegraparser')
-    command.extend(['--pt', tegraparser_values['--pt'], \
+    command.extend(['--pt', partition_file, \
             '--generateflashindex', cfg_file, \
             index_file_location])
     run_command(command)
-
 
 def tegraflash_get_magicid(bin_type):
    if bin_type == "mts_preboot":
@@ -1030,6 +1109,14 @@ def tegraflash_get_magicid(bin_type):
        return 'TOSB'
    if bin_type == "eks":
       return 'EKSB'
+   if bin_type == "dce_fw":
+       return 'DCEF'
+   if bin_type == 'tsec_fw':
+      return 'TSEC'
+   if bin_type == 'mb2_rf':
+      return 'MB2R'
+   if bin_type == 'psc_rf':
+      return 'PSCR'
    if bin_type == "mb1_boot_config_table":
       return 'MBCT'
    if bin_type == "dram_ecc":
@@ -1054,8 +1141,6 @@ def tegraflash_get_magicid(bin_type):
       return 'KRNL'
    if bin_type == "kernel_dtb":
       return 'KDTB'
-   if bin_type == "xusb_fw":
-      return 'XUSB'
    return 'DATA'
 
 def tegraflash_sign(exports):
@@ -1066,6 +1151,7 @@ def tegraflash_sign(exports):
     signed_files = [ ]
 
     tegraflash_get_key_mode()
+    tegraflash_preprocess_configs()
 
     output_dir = tegraflash_abs_path('signed')
     # Create signed directory. If exists, clear all files
@@ -1136,6 +1222,12 @@ def tegraflash_sign(exports):
     if tegrabct_values['--mb1_cold_boot_bct'] is not None:
         shutil.copyfile(tegrabct_values['--mb1_cold_boot_bct'], output_dir + "/" + tegrabct_values['--mb1_cold_boot_bct'])
 
+    #TODO: t23x specific feature for mb2bct
+    if tegrabct_values['--mb2_bct'] is not None:
+        shutil.copyfile(tegrabct_values['--mb2_bct'], output_dir + "/" + tegrabct_values['--mb2_bct'])
+    if tegrabct_values['--mb2_cold_boot_bct'] is not None:
+        shutil.copyfile(tegrabct_values['--mb2_cold_boot_bct'], output_dir + "/" + tegrabct_values['--mb2_cold_boot_bct'])
+
     if tegrabct_values['--membct_rcm'] is not None:
         shutil.copyfile(tegrabct_values['--membct_rcm'], output_dir + "/" + tegrabct_values['--membct_rcm'])
     if tegrabct_values['--membct_cold_boot'] is not None:
@@ -1152,7 +1244,7 @@ def tegraflash_sign(exports):
     if int(values['--chip'], 0) == 0x18 or int(values['--chip'], 0) == 0x19 :
         # --pt flash.xml.bin --generateflashindex flash.xml.tmp <out>
         flash_index = "flash.idx"
-        tegraflash_generate_index_file(output_dir + "/" + os.path.basename(cfg_file), flash_index)
+        tegraflash_generate_index_file(output_dir + "/" + os.path.basename(cfg_file), flash_index, tegraparser_values['--pt'])
         shutil.copyfile(flash_index, output_dir + "/" + flash_index)
 
 def tegraflash_update_cfg_file(signed_files, cfg_file, output_dir, chip=None, only_generated=False):
@@ -1167,7 +1259,7 @@ def tegraflash_update_cfg_file(signed_files, cfg_file, output_dir, chip=None, on
         file_node = node.find('filename')
         part_type = node.attrib.get('type').strip()
         part_name = node.attrib.get('name').strip()
-        if file_node is not None and not only_generated:
+        if file_node is not None and file_node.text is not None and not only_generated:
             file_name = file_node.text.strip()
             if node.get('authentication_group')is not None:
                 if node.get('authentication_group') == node.get('id'):
@@ -1279,20 +1371,14 @@ def tegraflash_encrypt_and_copy_signed_binaries(xml_file, output_dir):
         file_name = file_nodes.get('name')
         file_type = file_nodes.get('type')
         signed_file = file_nodes.find(mode).get(list_text)
-        magic_id = tegraflash_get_magicid(file_type)
         if file_type != "mb1_bootloader" and file_type != "wb0":
-            signed_file = tegraflash_oem_encrypt_and_sign_file(signed_file, False, magic_id)
+            signed_file = tegraflash_oem_encrypt_and_sign_file(signed_file, False)
         shutil.copyfile(signed_file, output_dir + "/" + os.path.basename(signed_file))
         if int(values['--chip'], 0) == 0x18:
             file_name = file_name.replace('_sigheader', '')
             file_name = file_name.replace('_wbheader.bin.encrypt', '.bin')
             file_name = file_name.replace('_wbheader', '')
-        if int(values['--chip'], 0) == 0x19:
-            file_name = file_name.replace('_sigheader', '')
-            file_name = file_name.replace('_wbheader.bin.encrypt', '.bin')
-            file_name = file_name.replace('_wbheader', '')
-            file_name = file_name.replace('dev.bin', 'dev_sigheader.bin')
-            file_name = file_name.replace('_sigheader.encrypt', '')
+            file_name = file_name.replace('_aligned', '')
         signed_files.extend([file_name, signed_file])
     return signed_files
 
@@ -1317,6 +1403,7 @@ def tegraflash_copy_signed_binaries(xml_file, output_dir):
         if int(values['--chip'], 0) != 0x21:
             file_name = file_name.replace('_sigheader', '')
             file_name = file_name.replace('_wbheader', '')
+            file_name = file_name.replace('_aligned', '')
         signed_files.extend([file_name, signed_file])
 
     return signed_files
@@ -1359,10 +1446,7 @@ def tegraflash_dump(args, dump_args):
         tegraflash_send_bct()
     else:
         tegraflash_generate_rcm_message(is_pdf)
-        if values['--encrypt_key'] is not None and int(values['--chip'], 0) == 0x18:
-            tegraflash_send_tboot(tegrarcm_values['--rcm_1_signed'])
-        else:
-            tegraflash_send_tboot(tegrarcm_values['--signed_list'])
+        tegraflash_send_tboot(tegrarcm_values['--signed_list'])
     args['--skipuid'] = False
 
     if dump_args[0] == 'ram':
@@ -1411,10 +1495,6 @@ def tegraflash_dumpeeprom(args, params):
         out_file = tegraflash_abs_path(out_file)
         command.extend(['--oem', 'platformdetails', 'eeprom', out_file])
         run_command(command)
-        command = exec_file('tegrarcm')
-        command.extend(['--reboot', 'recovery'])
-        run_command(command)
-        time.sleep(2)
         return
 
     if len(params) == 0:
@@ -1642,6 +1722,8 @@ def tegraflash_burnfuses(args, fuse_args):
     values.update(args)
 
     info_print('Burning fuses')
+
+    tegraflash_preprocess_configs()
 
     if values['--chip'] is None:
         raise tegraflash_exception("chip is not specified")
@@ -1889,26 +1971,29 @@ def tegraflash_symlink(srcfile, destfile):
         process = subprocess.Popen(['cmd', '/c', 'mklink /H ' + destfile + ' ' + srcfile], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         process.wait();
     else:
-        os.symlink(srcfile, destfile)
+        if (not os.path.islink(destfile)):
+            os.symlink(srcfile, destfile)
 
-def tegraflash_nvsign(exports, in_file, only_sign):
+def tegraflash_nvsign(exports, in_file, magic, only_sign):
     values.update(exports)
 
-    if int(values['--chip'], 0) not in [0x19, 0x23]:
+    if int(values['--chip'], 0) != 0x19:
         return
     filename = os.path.basename(in_file)
     info_print(filename)
     out_file = os.path.splitext(filename)[0] + '_dev' + os.path.splitext(filename)[1]
+    aligned_file = os.path.splitext(filename)[0] + '_aligned' + os.path.splitext(filename)[1]
+    if os.path.exists(in_file):
+        shutil.copyfile(in_file, aligned_file)
     mode = tegrasign_values['--mode']
     command = exec_file('tegrahost')
     command.extend(['--chip', values['--chip']])
-    command.extend(['--align', in_file])
+    command.extend(['--align', aligned_file])
     run_command(command)
 
-    if not os.path.exists(filename):
-        tegraflash_symlink(in_file, filename)
+    filename = aligned_file
 
-    if not _is_header_present(in_file):
+    if not _is_header_present(aligned_file):
         # check if encryption skip is set
         if bool(only_sign) == False:
             call_tegrasign(filename, None, None, values['--nvencrypt_key'], None, None, None, None, None, None)
@@ -1917,71 +2002,52 @@ def tegraflash_nvsign(exports, in_file, only_sign):
         mode = 'nvidia-rsa'
         command = exec_file('tegrahost')
         command.extend(['--chip', values['--chip'], values['--chip_major']])
-        command.extend(['--magicid', 'MB1B'])
+        command.extend(['--ratchet', values['--nv_nvratchet'], values['--nv_oemratchet']])
+        command.extend(['--magicid', magic])
         command.extend(['--addmb1nvheader', filename, mode])
         run_command(command)
         filename = os.path.splitext(filename)[0] + '_sigheader' + os.path.splitext(filename)[1]
 
-    if int(values['--cl'],0) >= 39027124:
+    if int(values['--chip'], 0) == 0x19:
         args_offset = '3792'
         args_length = '304'
     else:
         args_offset = '1760'
         args_length = '288'
 
-    call_tegrasign(filename, None, None, values['--nv_key'], args_length, None, args_offset, None, None, None)
+    call_tegrasign(filename, None, None, values['--nv_key'], args_length, None, args_offset, None, 'sha512', None)
 
     signed_file = os.path.splitext(filename)[0] + '.sig'
     sig_type = "nvidia-rsa"
     command = exec_file('tegrahost')
-    if int(values['--chip'], 0) in [0x19, 0x23]:
+    if int(values['--chip'], 0) == 0x19:
         command.extend(['--chip', values['--chip'], values['--chip_major']])
-    else:
-        if int(values['--chip'], 0) == 0x18:
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-
     command.extend(['--updatesigheader', filename, signed_file, sig_type])
     run_command(command)
 
     shutil.copyfile(filename, out_file)
     return out_file
 
-def _is_ratchet_set_needed(magic_id):
-    images_need_ratchet = ['MBCT', 'SPEF', 'DECC', 'ISTU', 'BIST', 'MB2B', 'MEMB', 'CPBL', 'TOSB', 'EKSB', 'BPMF', 'BPMD', 'SCEF', 'RCEF', 'APEF', 'CDTB', 'KRNL', 'KDTB', 'XUSB']
-    if magic_id in images_need_ratchet:
-        return True
-    else:
-        return False
-
-def tegraflash_oem_encrypt_and_sign_file(in_file, header , magic_id):
+def tegraflash_oem_encrypt_and_sign_file(in_file, header):
     filename = os.path.basename(in_file)
+    info_print(filename)
+    aligned_file = os.path.splitext(filename)[0] + '_aligned' + os.path.splitext(filename)[1]
+    if os.path.exists(in_file):
+        shutil.copyfile(in_file, aligned_file)
     mode = tegrasign_values['--mode']
     command = exec_file('tegrahost')
     command.extend(['--chip', values['--chip']])
-    command.extend(['--align', in_file])
+    command.extend(['--align', aligned_file])
     run_command(command)
 
-    if not os.path.exists(filename):
-        tegraflash_symlink(in_file, filename)
+    filename = aligned_file
 
     mode = 'oem-rsa-sbk'
-    if bool(header) ==True:
-        if int(values['--chip'], 0) == 0x18:
-            command = exec_file('tegrahost')
-            command.extend(['--appendsigheader', filename, mode])
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-            run_command(command)
-            filename = os.path.splitext(filename)[0] + '_sigheader' + os.path.splitext(filename)[1]
-    else:
-        if int(values['--chip'], 0) == 0x19 and not _is_header_present(filename):
-            command = exec_file('tegrahost')
-            command.extend(['--appendsigheader', filename, mode])
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-            command.extend(['--magicid', magic_id])
-            if values['--minratchet_config'] is not None and _is_ratchet_set_needed(magic_id):
-                command.extend(['--ratchet_blob', tegrahost_values['--ratchet_blob']])
-            run_command(command)
-            filename = os.path.splitext(filename)[0] + '_sigheader' + os.path.splitext(filename)[1]
+    if bool(header) == True:
+        command = exec_file('tegrahost')
+        command.extend(['--appendsigheader', filename, mode])
+        run_command(command)
+        filename = os.path.splitext(filename)[0] + '_sigheader' + os.path.splitext(filename)[1]
 
     root = ElementTree.Element('file_list')
     comment = ElementTree.Comment('Auto generated by tegraflash.py')
@@ -1989,20 +2055,9 @@ def tegraflash_oem_encrypt_and_sign_file(in_file, header , magic_id):
     child = ElementTree.SubElement(root, 'file')
     child.set('name', filename)
     if bool(header) == True:
-        if int(values['--chip'], 0) == 0x19:
-           if not _is_header_present(filename):
-              child.set('offset', '0')
-           else:
-              child.set('offset', '4096')
-
-        else :
-            child.set('offset', '400')
+        child.set('offset', '400')
     else:
-        if int(values['--chip'], 0) == 0x19:
-           child.set('offset', '2960')
-           child.set('length', '1136')
-        else :
-           child.set('offset', '384')
+        child.set('offset', '384')
     sbk = ElementTree.SubElement(child, 'sbk')
     sbk.set('encrypt', '1')
     sbk.set('sign', '1')
@@ -2011,27 +2066,16 @@ def tegraflash_oem_encrypt_and_sign_file(in_file, header , magic_id):
     pkc = ElementTree.SubElement(child, 'pkc')
     pkc.set('signature', filename + '.sig')
     pkc.set('signed_file', filename + '.signed')
-    ec = ElementTree.SubElement(child, 'ec')
-    ec.set('signature', filename + '.sig')
-    ec.set('signed_file', filename + '.signed')
-    eddsa = ElementTree.SubElement(child, 'eddsa')
-    eddsa.set('signature', filename + '.sig')
-    eddsa.set('signed_file', filename + '.signed')
     sign_tree = ElementTree.ElementTree(root);
     sign_tree.write(filename + '_list.xml')
 
-    pkh_val = None
-    mont_val = None
     if bool(header) == True:
-        key_val = values['--encrypt_key'][0]
+        args_key = values['--encrypt_key'][0]
     else:
-        key_val = values['--key']
-        pkh_val = tegrasign_values['--pubkeyhash']
-    if int(values['--chip'], 0) == 0x19:
-        if mode == 'oem-rsa':
-            if os.path.isfile(tegrasign_values['--getmontgomeryvalues']):
-                mont_val = tegrasign_values['--getmontgomeryvalues']
-    call_tegrasign(None, None, mont_val, key_val, None, filename + '_list.xml', None, pkh_val, None, None)
+        args_key = values['--key']
+
+
+    call_tegrasign(None, None, None, args_key, None, filename + '_list.xml', None, None, None, None)
 
     sign_xml_file = filename + '_list_signed.xml'
 
@@ -2039,15 +2083,10 @@ def tegraflash_oem_encrypt_and_sign_file(in_file, header , magic_id):
         xml_tree = ElementTree.parse(file)
 
     mode = xml_tree.getroot().get('mode')
-    if mode == "pkc" or mode == "ec" or mode == "eddsa":
+    if mode == "pkc":
+        sig_type = "oem-rsa"
         list_text = "signed_file"
         sig_file = "signature"
-        if mode == "pkc":
-           sig_type = "oem-rsa"
-        if mode == "ec":
-           sig_type = "oem-ecc"
-        if mode == "eddsa":
-           sig_type = "oem-eddsa"
     else:
         list_text = "encrypt_file"
         sig_type = "zerosbk"
@@ -2059,34 +2098,28 @@ def tegraflash_oem_encrypt_and_sign_file(in_file, header , magic_id):
         sig_file = file_nodes.find(mode).get(sig_file)
 
     command = exec_file('tegrahost')
-    if int(values['--chip'], 0) == 0x19:
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-    else:
-        if int(values['--chip'], 0) == 0x18:
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-
     command.extend(['--updatesigheader', signed_file, sig_file, sig_type])
-    if sig_type != "zerosbk":
-        if os.path.isfile(tegrasign_values['--pubkeyhash']):
-           command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-    if sig_type == "oem-rsa":
-        if os.path.isfile(tegrasign_values['--getmontgomeryvalues']):
-            command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
 
     run_command(command)
 
     signed_file = os.path.splitext(signed_file)[0] + os.path.splitext(signed_file)[1]
+    newname = signed_file.replace('_aligned','')
+    shutil.copyfile(signed_file, newname)
+    signed_file = newname
     return signed_file
 
 def tegraflash_t21x_sign_file(magicid, in_file):
     filename = os.path.basename(in_file)
+    aligned_file = os.path.splitext(filename)[0] + '_aligned' + os.path.splitext(filename)[1]
+    if os.path.exists(in_file):
+        shutil.copyfile(in_file, aligned_file)
     mode = tegrasign_values['--mode']
     command = exec_file('tegrahost')
     command.extend(['--chip', values['--chip']])
-    command.extend(['--align', in_file])
+    command.extend(['--align', aligned_file])
     run_command(command)
-    if not os.path.exists(filename):
-        tegraflash_symlink(in_file, filename)
+
+    filename = aligned_file
 
     if mode == 'pkc':
         mode = 'oem-rsa'
@@ -2139,8 +2172,6 @@ def tegraflash_t21x_sign_file(magicid, in_file):
         sig_file = "hash"
 
     #signed_file = filename
-
-   # signed_file = filename
     for file_nodes in xml_tree.iter('file'):
         signed_file = file_nodes.find(mode).get(list_text)
         sig_file = file_nodes.find(mode).get(sig_file)
@@ -2148,7 +2179,7 @@ def tegraflash_t21x_sign_file(magicid, in_file):
         pkc_file = filename + '.signed'
     else:
         pkc_file = filename + '.encrypt'
-    #    signed_file = filename
+    #signed_file = filename
     command = exec_file('tegrahost')
     command.extend(['--updatesigheader', signed_file, sig_file, sig_type])
     if os.path.isfile(tegrasign_values['--pubkeyhash']):
@@ -2157,18 +2188,23 @@ def tegraflash_t21x_sign_file(magicid, in_file):
 
     #if mode == "pkc":
     shutil.copyfile(signed_file, pkc_file)
+    newname = pkc_file.replace('_aligned','')
+    shutil.copyfile(pkc_file, newname)
+    pkc_file = newname
     return pkc_file
 
 def tegraflas_oem_sign_file(in_file, magic_id):
     filename = os.path.basename(in_file)
+    aligned_file = os.path.splitext(filename)[0] + '_aligned' + os.path.splitext(filename)[1]
+    if os.path.exists(in_file):
+        shutil.copyfile(in_file, aligned_file)
     mode = tegrasign_values['--mode']
     command = exec_file('tegrahost')
     command.extend(['--chip', values['--chip']])
-    command.extend(['--align', in_file])
+    command.extend(['--align', aligned_file])
     run_command(command)
 
-    if not os.path.exists(filename):
-        tegraflash_symlink(in_file, filename)
+    filename = aligned_file
 
     if mode == 'pkc':
         mode = 'oem-rsa'
@@ -2182,15 +2218,12 @@ def tegraflas_oem_sign_file(in_file, magic_id):
     command = exec_file('tegrahost')
 
     if int(values['--chip'], 0) in [0x19, 0x23]:
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        #fixme : right magicid needs to be passed in recovery path
-        command.extend(['--magicid', magic_id])
-    else:
-        if int(values['--chip'], 0) == 0x18:
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
+       command.extend(['--chip', values['--chip'], values['--chip_major']])
+       #fixme : right magicid needs to be passed in recovery path
+       command.extend(['--magicid', magic_id])
 
-    if values['--minratchet_config'] is not None and _is_ratchet_set_needed(magic_id):
-        command.extend(['--ratchet_blob', tegrahost_values['--ratchet_blob']])
+    if values['--minratchet_config'] is not None:
+       command.extend(['--ratchet_blob', tegrahost_values['--ratchet_blob']])
 
     command.extend(['--appendsigheader', filename, mode])
     run_command(command)
@@ -2202,9 +2235,12 @@ def tegraflas_oem_sign_file(in_file, magic_id):
     child = ElementTree.SubElement(root, 'file')
     child.set('name', filename)
     # fixed offsets for BCH
-    if int(values['--chip'], 0) in [0x19, 0x23]:
+    if int(values['--chip'], 0) == 0x19:
         child.set('offset', '2960')
         child.set('length', '1136')
+    elif int(values['--chip'], 0) == 0x23:
+        child.set('offset', '1920')
+        child.set('length', '2176')
     else :
         child.set('offset', '384')
     sbk = ElementTree.SubElement(child, 'sbk')
@@ -2227,13 +2263,14 @@ def tegraflas_oem_sign_file(in_file, magic_id):
 
     key_val = values['--key']
     list_val = filename + '_list.xml'
+    pkh_val = None
     mont_val = None
-    command.extend(['--key'] + values['--key'])
-    command.extend(['--list', filename + '_list.xml'])
-    pkh_val = tegrasign_values['--pubkeyhash']
+    if os.path.isfile(tegrasign_values['--pubkeyhash']):
+        pkh_val = tegrasign_values['--pubkeyhash']
     if int(values['--chip'], 0) in [0x19, 0x23] :
         if mode == 'oem-rsa':
-            mont_val = tegrasign_values['--getmontgomeryvalues']
+            if os.path.isfile(tegrasign_values['--getmontgomeryvalues']):
+                mont_val = tegrasign_values['--getmontgomeryvalues']
     call_tegrasign(None, None, mont_val, key_val, None, list_val, None, pkh_val, None, None)
 
     sign_xml_file = filename + '_list_signed.xml'
@@ -2274,16 +2311,15 @@ def tegraflas_oem_sign_file(in_file, magic_id):
             command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
         if os.path.exists(tegrasign_values['--getmontgomeryvalues']):
             command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
-    else:
-        if int(values['--chip'], 0) == 0x18:
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
 
     command.extend(['--updatesigheader', signed_file, sig_file, sig_type])
 
     run_command(command)
 
     signed_file = os.path.splitext(signed_file)[0] + os.path.splitext(signed_file)[1]
-
+    newname = signed_file.replace('_aligned','')
+    shutil.copyfile(signed_file, newname)
+    signed_file = newname
     return signed_file
 
 def tegraflash_verify_emmc(test_args):
@@ -2456,9 +2492,6 @@ def tegraflash_send_tboot(file_name):
     info_print('Boot Rom communication')
     command = exec_file('tegrarcm')
     command.extend(['--chip', values['--chip'], values['--chip_major']])
-    if values['--applet_softfuse']:
-        soft_fuse = values['--applet_softfuse']
-        command.extend(['--rcm', soft_fuse])
     command.extend(['--rcm', file_name])
 
     if values['--skipuid']:
@@ -2649,10 +2682,10 @@ def tegraflash_generate_blob(sign_images, blob_filename):
     child.set('name', filename)
     child.set('type', 'bootloader')
 
+    images_to_sign = ['mts_preboot', 'mts_bootpack', 'mts_mce', 'mts_proper', 'mb2_bootloader', 'fusebypass', 'bootloader_dtb', 'spe_fw', 'bpmp_fw', 'bpmp_fw_dtb', 'tlk', 'eks', 'sce_fw', 'adsp_fw']
     if int(values['--chip'], 0) == 0x18:
-        images_to_sign = ['mts_preboot', 'mts_bootpack', 'mts_mce', 'mts_proper', 'mb2_bootloader', 'fusebypass', 'bootloader_dtb', 'spe_fw', 'bpmp_fw', 'bpmp_fw_dtb', 'tlk', 'eks', 'sce_fw', 'adsp_fw', 'kernel', 'kernel_dtb']
-    else:
-        images_to_sign = ['mts_preboot', 'mts_bootpack', 'mts_mce', 'mts_proper', 'mb2_bootloader', 'fusebypass', 'bootloader_dtb', 'spe_fw', 'bpmp_fw', 'bpmp_fw_dtb', 'tlk', 'eks', 'sce_fw', 'adsp_fw']
+        images_to_sign.append('kernel')
+        images_to_sign.append('kernel_dtb')
 
     if values['--bins']:
         bins = values['--bins'].split(';')
@@ -2744,8 +2777,9 @@ def tegraflash_send_bootloader(sign_images = True):
     if values['--applet-cpu'] is not None:
         command.extend(['--download', 'tbc', values['--applet-cpu'], '0', '0'])
 
-    if values['--bldtb'] is not None:
-        command.extend(['--download', 'rp1', bldtb, '0'])
+    if int(values['--chip'], 0) not in [0x19]:
+        if values['--bldtb'] is not None:
+            command.extend(['--download', 'rp1', bldtb, '0'])
 
     if values['--dtb'] is not None:
         command.extend(['--download', 'dtb', values['--dtb'], '0'])
@@ -2755,7 +2789,10 @@ def tegraflash_send_bootloader(sign_images = True):
 def tegraflash_generate_devimages(cmd_args):
     info_print('Creating storage-device images')
 
-    output_dir = tegraflash_abs_path(paths['OUT'] + '/dev_images')
+    if values['--output_dir'] is None:
+        output_dir = tegraflash_abs_path(paths['OUT'] + '/dev_images')
+    else:
+        output_dir = values['--output_dir']
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -2767,6 +2804,7 @@ def tegraflash_generate_devimages(cmd_args):
     if values['--tegraflash_v2']:
         command = exec_file('tegraparser')
         command.extend(['--generategpt', '--pt', tegraparser_values['--pt']])
+        command.extend(['--outputdir', output_dir + dirsep])
         run_command(command)
 
     command = exec_file('tegradevflash')
@@ -2789,6 +2827,97 @@ def tegraflash_flash_partitions(skipsanitize):
         command.extend(['--generategpt', '--pt', tegraparser_values['--pt']])
         run_command(command)
 
+        if not values['--sparseupdate']:
+            tegraflash_just_flash(skipsanitize)
+            return
+
+        command = exec_file('tegraparser')
+        command.extend(['--pt', tegraparser_values['--pt']])
+        command.extend(['--generateflashindex', 'flash.idx'])
+        run_command(command)
+
+        total_devices, qspi_device, partitions, device_info = parse_indexfile_for_qspi('flash.idx')
+
+        if qspi_device:
+            for i in range(total_devices):
+                if i in qspi_device and compareGPTOfQspi(i, device_info):
+                    sparseUpdateQspi(i, device_info, skipsanitize)
+                else:
+                    tegraflash_just_flash(skipsanitize, device=i+1)
+        else:
+            tegraflash_just_flash(skipsanitize)
+    else:
+        tegraflash_just_flash(skipsanitize)
+
+def sparseUpdateQspi(ix, device_info, skipsanitize):
+    output_dir = tegraflash_abs_path('temp')
+    # Create a directory to store file read from device. If exists, clear all files
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir, ignore_errors=True)
+    os.makedirs(output_dir)
+
+    info_print("Sparse flash qspi device instance {}".format(device_info[ix]["instance"]))
+    for part in device_info[ix]['parts']:
+        device, instance, name = part[1].split(':')
+        file_to_write = part[4]
+        if name == "secondary_gpt":
+            continue
+
+        if file_to_write:
+            file_read_from_device = "{}/{}".format(output_dir, file_to_write)
+            command = exec_file('tegradevflash')
+            command.extend(['--read', "/spi/{}/{}".format(device_info[ix]["instance"], name)])
+            command.extend([file_read_from_device])
+            run_command(command)
+
+            with open(file_to_write, "rb") as f1, open(file_read_from_device, "rb") as f2:
+                bin1 = f1.read()
+                bin2 = f2.read()
+                if bin1 != bin2[:len(bin1)]:
+
+                    command = exec_file('tegradevflash')
+                    command.extend(['--erase', "/spi/{}/{}".format(device_info[ix]["instance"], name)])
+                    run_command(command)
+
+                    command = exec_file('tegradevflash')
+                    command.extend(['--write', "/spi/{}/{}".format(device_info[ix]["instance"], name)])
+                    command.extend(["{}".format(file_to_write)])
+                    run_command(command)
+
+        else:
+            command = exec_file('tegradevflash')
+            command.extend(['--erase', "/spi/{}/{}".format(device_info[ix]["instance"], name)])
+            run_command(command)
+
+
+
+def compareGPTOfQspi(ix, device_info):
+    info_print("Checking partition table of QSPI instance {}".format(device_info[ix]["instance"]))
+    output_dir = tegraflash_abs_path('temp')
+    # Create a directory to store file read from device. If exists, clear all files
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir, ignore_errors=True)
+    os.makedirs(output_dir)
+    qspi_gpt_name = "gpt_secondary_3_{}.bin".format(device_info[ix]["instance"])
+    try:
+        file_read_from_device = "{}/{}".format(output_dir, qspi_gpt_name)
+        command = exec_file('tegradevflash')
+        command.extend(['--read', "/spi/{}/secondary_gpt".format(device_info[ix]["instance"])])
+        command.extend([file_read_from_device])
+        run_command(command)
+
+        return compareGPT(qspi_gpt_name, file_read_from_device)
+    except:
+        return False
+
+
+def tegraflash_just_flash(skipsanitize, device=None):
+
+    if device:
+        info_print("Start flashing device {}".format(device))
+    else:
+        info_print("Start flashing")
+
     command = exec_file('tegradevflash')
     command.extend(['--pt', tegraparser_values['--pt']])
 
@@ -2799,6 +2928,8 @@ def tegraflash_flash_partitions(skipsanitize):
         command.extend(['--skipsanitize'])
 
     command.extend(['--create']);
+    if device and type(device) == int:
+        command.extend(['--dev',str(device)])
     run_command(command)
 
 def tegraflash_reboot(args):
@@ -2809,7 +2940,7 @@ def tegraflash_reboot(args):
     else:
         raise tegraflash_exception(args[0] + " is not supported")
 
-    if int(values['--chip'], 0) == 0x21 or int(values['--chip'], 0) == 0x18:
+    if int(values['--chip'], 0) == 0x21 :
         try:
             command = exec_file('tegradevflash')
             command.extend(['--reboot', args[0]])
@@ -2853,6 +2984,7 @@ def tegraflash_update_rpmb(args):
         tegraflash_send_bct()
         args['--skipuid'] = False
     else:
+        tegraflash_preprocess_configs()
         tegraflash_generate_rcm_message()
         tegraflash_send_tboot(tegrarcm_values['--signed_list'])
         args['--skipuid'] = False
@@ -2927,8 +3059,6 @@ def tegraflash_encrypt_images(skip_header):
     command = exec_file('tegrahost')
     command.extend(['--chip', values['--chip']])
     command.extend(['--partitionlayout', tegraparser_values['--pt']]);
-    if values['--minratchet_config'] is not None:
-        command.extend(['--ratchet_blob', tegrahost_values['--ratchet_blob']])
 
     command.extend(['--list', tegrahost_values['--list']])
     if values['--tegraflash_v2']:
@@ -2952,7 +3082,7 @@ def tegraflash_encrypt_images(skip_header):
     pkh_val = tegrasign_values['--pubkeyhash']
     call_tegrasign(None, None, None, key_val, None, list_val, None, pkh_val, None, None)
 
-def tegraflash_sign_images(ovewrite_xml = True):
+def tegraflash_sign_images(ovewrite_xml = True, bct_flag = True):
     if values['--fb'] is not None and not values['--tegraflash_v2']:
         info_print('Updating warmboot with fusebypass information')
         command = exec_file('tegrahost')
@@ -3064,7 +3194,7 @@ def tegraflash_sign_images(ovewrite_xml = True):
 
     run_command(command)
 
-    if int(values['--chip'], 0) in [0x19, 0x23]:
+    if int(values['--chip'], 0) in [0x19, 0x23] and bct_flag:
        info_print('Filling MB1 storage info')
        tegraflash_fill_mb1_storage_info()
 
@@ -3127,8 +3257,6 @@ def tegraflash_update_bfs_images():
         command.extend(['--bct', tegrabct_values['--bct']])
         command.extend(['--chip', values['--chip'], values['--chip_major']])
         command.extend(['--updatebfsinfo', tegraparser_values['--pt']])
-        if values['--ignorebfs']:
-            command.extend(['--ignorebfs', tegraparser_values['--pt']])
         if os.path.isfile(tegrasign_values['--pubkeyhash']):
             command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
         run_command(command)
@@ -3204,8 +3332,9 @@ def apply_overlay_cfg(filename):
     return outfilename
 
 def concat_file(outfilename, infilename):
-    with open(outfilename, 'a+') as outfile,open(infilename) as infile:
-        outfile.write(infile.read())
+    with open(outfilename, 'ab+') as outfile:
+        with open(infilename, 'rb') as infile:
+            outfile.write(infile.read())
 
 def concatenate_misc_cfg():
     misc_cfgs = values['--misc_config']
@@ -3245,10 +3374,12 @@ def tegraflash_fill_mb1_storage_info():
     info_print('Generating br-bct')
     command = exec_file('tegrabct')
 
-    if int(values['--chip'], 0) in [0x19, 0x23]:
-        values['--sdram_config'] = apply_overlay_cfg(values['--sdram_config'])
-        if values['--wb0sdram_config'] is not None:
-            values['--wb0sdram_config'] = apply_overlay_cfg(values['--wb0sdram_config'])
+    if (int(values['--chip'], 0) in [0x19, 0x23]):
+        config_types = [".dts", ".dtb"]
+        if not any(cf_type in values['--sdram_config'] for cf_type in config_types):
+            values['--sdram_config'] = apply_overlay_cfg(values['--sdram_config'])
+            if values['--wb0sdram_config'] is not None:
+                values['--wb0sdram_config'] = apply_overlay_cfg(values['--wb0sdram_config'])
 
     if values['--bct'] is None and int(values['--chip'], 0) in [0x18, 0x19, 0x23]:
         values['--bct'] = 'br_bct.cfg'
@@ -3293,10 +3424,12 @@ def tegraflash_generate_br_bct(coldboot_bct):
     command = exec_file('tegrabct')
     bct_file = ""
 
-    if int(values['--chip'], 0) in [0x19, 0x23]:
-        values['--sdram_config'] = apply_overlay_cfg(values['--sdram_config'])
-        if values['--wb0sdram_config'] is not None:
-            values['--wb0sdram_config'] = apply_overlay_cfg(values['--wb0sdram_config'])
+    if (int(values['--chip'], 0) in [0x19, 0x23]):
+        config_types = [".dts", ".dtb"]
+        if not any(cf_type in values['--sdram_config'] for cf_type in config_types):
+            values['--sdram_config'] = apply_overlay_cfg(values['--sdram_config'])
+            if values['--wb0sdram_config'] is not None:
+                values['--wb0sdram_config'] = apply_overlay_cfg(values['--wb0sdram_config'])
 
     if values['--bct'] is None and int(values['--chip'], 0) in [0x18, 0x19, 0x23]:
         values['--bct'] = 'br_bct.cfg'
@@ -3405,126 +3538,73 @@ def tegraflash_generate_br_bct(coldboot_bct):
                 sbk_file = child.find('sbk').attrib.get('encrypt_file')
                 shutil.copyfile(sbk_file, bct_file)
 
-    if int(values['--chip'], 0) == 0x21:
-        info_print('Get Signed section of bct')
-        command = exec_file('tegrabct')
-        command.extend([brbct_arg, bct_file])
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        command.extend(['--listbct', tegrabct_values['--list']])
-        run_command(command)
+    info_print('Get Signed section of bct')
+    command = exec_file('tegrabct')
+    command.extend([brbct_arg, bct_file])
+    command.extend(['--chip', values['--chip'], values['--chip_major']])
+    command.extend(['--listbct', tegrabct_values['--list']])
+    run_command(command)
 
-        info_print('Signing BCT')
-        command = exec_file('tegrasign')
-        if values['--encrypt_key'] is not None:
-           info_print('Generating signatures')
-           key_val = values['--encrypt_key'][0]
-           list_val = tegrabct_values['--list']
-           pkh_val = tegrasign_values['--pubkeyhash']
-           call_tegrasign(None, None, None, key_val, None, list_val, None, pkh_val, None, None)
+    info_print('Signing BCT')
 
-           info_print('Updating BCT with signature')
-           command = exec_file('tegrabct')
-           command.extend([brbct_arg, bct_file])
-           command.extend(['--chip', values['--chip']])
-           command.extend(['--updatesig', tegrabct_values['--signed_list']])
+    if values['--encrypt_key'] is not None:
+       info_print('Generating signatures')
+       key_val = values['--encrypt_key'][0]
+       list_val = tegrabct_values['--list']
+       pkh_val = tegrasign_values['--pubkeyhash']
+       call_tegrasign(None, None, None, key_val, None, list_val, None, pkh_val, None, None)
 
-           if os.path.isfile(tegrasign_values['--pubkeyhash']):
-               command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
+       info_print('Updating BCT with signature')
+       command = exec_file('tegrabct')
+       command.extend([brbct_arg, bct_file])
+       command.extend(['--chip', values['--chip']])
+       command.extend(['--updatesig', tegrabct_values['--signed_list']])
 
-           run_command(command)
+       if os.path.isfile(tegrasign_values['--pubkeyhash']):
+           command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
 
-        command = exec_file('tegrasign')
-        command.extend(['--key'] + values['--key'])
-        command.extend(['--list', tegrabct_values['--list']])
+       run_command(command)
+
+    key_val = values['--key']
+    list_val = tegrabct_values['--list']
+    pkh_val = tegrasign_values['--pubkeyhash']
+    mont_val = None
+    if int(values['--chip'], 0) in [0x19, 0x23]:
+        mont_val = tegrasign_values['--getmontgomeryvalues']
+    call_tegrasign(None, None, mont_val, key_val, None, list_val, None, pkh_val, None, None)
+
+    info_print('Updating BCT with signature')
+    command = exec_file('tegrabct')
+    command.extend([brbct_arg, bct_file])
+    command.extend(['--chip', values['--chip'], values['--chip_major']])
+    command.extend(['--updatesig', tegrabct_values['--signed_list']])
+
+    if os.path.isfile(tegrasign_values['--pubkeyhash']):
         command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-        run_command(command)
 
-        info_print('Updating BCT with signature')
+    if os.path.exists(tegrasign_values['--getmontgomeryvalues']):
+        command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
+
+    run_command(command)
+
+# For Chip ID 0x23, in addition to generating and updating signatures,
+# we also generate and update sha digest for BR-BCT.
+    if int(values['--chip'], 0) == 0x23:
+
+        key_val = values['--key']
+        list_val = tegrabct_values['--list']
+        sha_val = 'sha512'
+
+        # Generating SHA2 Hash for BR-BCT
+        info_print('Generating SHA2 Hash')
+        call_tegrasign(None, None, None, key_val, None, list_val, None, None, sha_val, None)
+
+        # Updating SHA2 Hash in BR-BCT
+        info_print('Updating BCT with SHA2 Hash')
         command = exec_file('tegrabct')
         command.extend([brbct_arg, bct_file])
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        command.extend(['--updatesig', tegrabct_values['--signed_list']])
-
-        if os.path.isfile(tegrasign_values['--pubkeyhash']):
-            command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-
-        if os.path.exists(tegrasign_values['--getmontgomeryvalues']):
-            command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
-
-        run_command(command)
-
-    if values['--encrypt_key'] is not None and int(values['--chip'], 0) != 0x21:
-        info_print('Get encrypted section of bct')
-        command = exec_file('tegrabct')
-        command.extend([brbct_arg, tegrabct_values['--bct']])
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        if int(values['--chip'], 0) == 0x19:
-            command.extend(['--listencbct', tegrabct_values['--list']])
-        else:
-            command.extend(['--listbct', tegrabct_values['--list']])
-        run_command(command)
-
-        info_print('Signing BCT')
-        command = exec_file('tegrasign')
-        if values['--encrypt_key'] is not None:
-           info_print('Generating signatures with encryption')
-           command = exec_file('tegrasign')
-           command.extend(['--key', values['--encrypt_key'][0]])
-           if int(values['--chip'], 0) == 0x19:
-               command.extend(['--offset', '2328'])
-               command.extend(['--file', bct_file])
-           else :
-               command.extend(['--list', tegrabct_values['--list']])
-               command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-           run_command(command)
-
-           info_print('Updating BCT with signature')
-           if int(values['--chip'], 0) != 0x19:
-               command = exec_file('tegrabct')
-               command.extend([brbct_arg, bct_file])
-               command.extend(['--chip', values['--chip']])
-               command.extend(['--updatesig', tegrabct_values['--signed_list']])
-
-               if os.path.isfile(tegrasign_values['--pubkeyhash']):
-                   command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-
-               run_command(command)
-           else:
-                with open(tegrabct_values['--list'], 'r+') as file:
-                    xml_tree = ElementTree.parse(file)
-                    root = xml_tree.getroot()
-                    for child in root:
-                        sbk_file = child.find('sbk').attrib.get('encrypt_file')
-                        sbk_file =sbk_file.replace('br_bct_BR.bct.encrypt' ,'br_bct_BR_encrypt.bct')
-                        shutil.copyfile(sbk_file, bct_file)
-
-    if int(values['--chip'], 0) != 0x21:
-        info_print('Get Signed section of bct')
-        command = exec_file('tegrabct')
-        command.extend([brbct_arg, tegrabct_values['--bct']])
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        command.extend(['--listbct', tegrabct_values['--list']])
-        run_command(command)
-
-        command = exec_file('tegrasign')
-        command.extend(['--key'] + values['--key'])
-        command.extend(['--list', tegrabct_values['--list']])
-        command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-        if int(values['--chip'], 0) in [0x19, 0x23]:
-            command.extend(['--getmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
-        run_command(command)
-
-        info_print('Updating BCT with signature')
-        command = exec_file('tegrabct')
-        command.extend([brbct_arg, bct_file])
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        command.extend(['--updatesig', tegrabct_values['--signed_list']])
-
-        if os.path.isfile(tegrasign_values['--pubkeyhash']):
-            command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-
-        if os.path.exists(tegrasign_values['--getmontgomeryvalues']):
-            command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
+        command.extend(['--chip', values['--chip']])
+        command.extend(['--updatesha', tegrabct_values['--signed_list']])
         run_command(command)
 
 # Convert BPMP DTSI to BPMP DTB
@@ -3838,7 +3918,6 @@ def tegraflash_generate_mem_bct(is_cold_boot_mb1_bct):
 
     if bool(is_cold_boot_mb1_bct) == True:
         blocksize = 512
-        i = 5
         if tegraparser_values['--pt'] is not None:
             info_print('Getting sector size from pt')
             command = exec_file('tegraparser')
@@ -3850,29 +3929,14 @@ def tegraflash_generate_mem_bct(is_cold_boot_mb1_bct):
                     blocksize = struct.unpack('<I', f.read(4))[0]
                     info_print('BlockSize read from layout is %x\n' %blocksize)
                 if blocksize not in[512, 4096]:
-                    infoprint('invalid block size ')
-                for i in range(1, 5):
-                  if values['--encrypt_key'] is not None:
-                      command = exec_file('tegrasign')
-                      command.extend(['--key', values['--encrypt_key'][0]])
-                      command.extend(['--file', mem_bcts[i - 1]])
-                      run_command(command)
-                      mem_bcts[i-1] = os.path.splitext(mem_bcts[i-1])[0] + '_encrypt'+ os.path.splitext(mem_bcts[i-1])[1]
-                      i= i+1
-
+                    info_print('invalid block size ')
         command = exec_file('tegrahost')
         command.extend(['--chip', values['--chip'], values['--chip_major']])
         command.extend(['--blocksize', str(blocksize)])
         command.extend(['--magicid', "MEMB"])
         command.extend(['--addsigheader_multi', mem_bcts[0], mem_bcts[1], mem_bcts[2], mem_bcts[3]])
         run_command(command)
-        if values['--encrypt_key'] is not None:
-            os.rename(filename + '_1_encrypt_sigheader.bct' , 'mem_coldboot.bct')
-        else:
-            os.rename(filename + '_1_sigheader.bct' , 'mem_coldboot.bct')
-
-        if values['--encrypt_key'] is not None:
-            tegrabct_values['--membct_cold_boot'] = tegraflash_oem_encrypt_and_sign_file('mem_coldboot.bct' ,False, 'MEMB')
+        os.rename(filename + '_1_sigheader.bct' , 'mem_coldboot.bct')
         tegrabct_values['--membct_cold_boot'] = tegraflas_oem_sign_file('mem_coldboot.bct', 'MEMB')
     else:
         tegraflash_get_ramcode()
@@ -3909,11 +3973,12 @@ def tegraflash_generate_mb1_bct(is_cold_boot_mb1_bct):
     if tmp is not None:
         command.extend(['--mb1bct', tmp])
 
-    if int(values['--chip'], 0) in [0x19, 0x23]:
-        concatenate_misc_cfg()
+    if (int(values['--chip'], 0) in [0x19, 0x23]):
+        config_types = [".dts", ".dtb"]
+        if not any(cf_type in values['--sdram_config'] for cf_type in config_types):
+            concatenate_misc_cfg()
 
     command.extend(['--sdram', values['--sdram_config']])
-
     tmp = None
     if values['--misc_config'] is not None:
         tmp = values['--misc_config']
@@ -3970,6 +4035,8 @@ def tegraflash_generate_mb1_bct(is_cold_boot_mb1_bct):
         command = exec_file('tegrabct')
         command.extend(['--chip', values['--chip']])
         command.extend(['--mb1bct', mb1bct_file])
+        if bool(is_cold_boot_mb1_bct) == False:
+            command.extend(['--recov'])
         command.extend(['--updatefwinfo', tegraparser_values['--pt']])
         run_command(command)
 
@@ -3990,14 +4057,14 @@ def tegraflash_generate_mb1_bct(is_cold_boot_mb1_bct):
 
     if bool(is_cold_boot_mb1_bct) == True:
         if values['--encrypt_key'] is not None:
-            tegrabct_values['--mb1_cold_boot_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_cold_boot_bct'] ,True, 'MBCT')
-            tegrabct_values['--mb1_cold_boot_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_cold_boot_bct'] ,False,'MBCT')
+            tegrabct_values['--mb1_cold_boot_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_cold_boot_bct'] ,True)
+            tegrabct_values['--mb1_cold_boot_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_cold_boot_bct'] ,False)
         else:
             tegrabct_values['--mb1_cold_boot_bct'] = tegraflas_oem_sign_file(tegrabct_values['--mb1_cold_boot_bct'], 'MBCT')
     else:
         if values['--encrypt_key'] is not None:
-            tegrabct_values['--mb1_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_bct'] ,True, 'MBCT')
-            tegrabct_values['--mb1_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_bct'] ,False, 'MBCT')
+            tegrabct_values['--mb1_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_bct'] ,True)
+            tegrabct_values['--mb1_bct'] = tegraflash_oem_encrypt_and_sign_file(tegrabct_values['--mb1_bct'] ,False)
         else:
             tegrabct_values['--mb1_bct'] = tegraflas_oem_sign_file(tegrabct_values['--mb1_bct'], 'MBCT')
 
@@ -4005,7 +4072,6 @@ def tegraflash_generate_bct():
     if values['--external_device']:
         # Don't generate bct for external devices
         return
-
     tegraflash_generate_br_bct(True)
 
     if int(values['--chip'], 0) == 0x21 and int(values['--chip_major'], 0) > 1:
@@ -4017,7 +4083,291 @@ def tegraflash_generate_bct():
        tegraflash_generate_mem_bct(True)
        tegraflash_generate_mem_bct(False)
 
+def concatenate_cpubl_bldtb():
+    info_print('Concatenating bl dtb to cpubl binary')
+
+    bl_dtb_file = values['--bldtb']
+    cpubl_bin_file = values['--cpubl']
+    cpubl_with_dtb = cpubl_bin_file.split('.', 1)[0] + '_with_dtb.bin'
+
+    if not os.path.exists(bl_dtb_file):
+        raise tegraflash_exception('Could not find ' + bl_dtb_file)
+
+    if not os.path.exists(cpubl_bin_file):
+        raise tegraflash_exception('Could not find ' + cpubl_bin_file)
+
+    shutil.copyfile(cpubl_bin_file, cpubl_with_dtb)
+    concat_file(cpubl_with_dtb, bl_dtb_file) # order: outfile, infile
+
+def set_partition_filename(match_str, filename, field='name'):
+    with open(values['--cfg'], 'r+') as file:
+        xml_tree = ElementTree.parse(file)
+        root = xml_tree.getroot()
+        for node in root.iter('partition'):
+            if(node.get(field) == match_str):
+                file_node = node.find('filename')
+                info_print('Change ' + file_node.text + ' to ' + filename)
+                file_node.text = filename
+
+        xml_tree.write(values['--cfg'])
+    return
+
+def get_partition_filename(match_str, field='name'):
+    with open(values['--cfg'], 'r') as file:
+        xml_tree = ElementTree.parse(file)
+
+    root = xml_tree.getroot()
+    target_bin_file = None
+
+    for node in root.iter('partition'):
+        if(node.get(field) == match_str):
+            target_node = node.find('filename')
+            target_bin_file = target_node.text.strip()
+            break
+    return target_bin_file
+
+# Check if stem exists in infile name, and return a backup copy
+def tegraflash_create_backup_file(infile, stem):
+    source_file = infile.replace(stem, '')
+    backup_file = os.path.splitext(source_file)[0] + stem + os.path.splitext(source_file)[1]
+    if not os.path.exists(source_file):
+        raise tegraflash_exception('Error: Can not find ' + source_file + ' to create ' + backup_file)
+    if not os.path.exists(backup_file):
+        shutil.copyfile(source_file, backup_file)
+    return backup_file
+
+# Concatenate files at 4k boundary
+def concat_file_4k(outfilename, infilenames):
+    info_print('Concatenating ' + ','.join(infilenames) + ' to ' + outfilename)
+    for infilename in infilenames:
+        with open(outfilename, 'ab+') as outfile:
+            with open(infilename, 'rb') as infile:
+                cur = outfile.tell()
+                outfile.write(bytearray((((cur-1) & ~0xFFF) + 0x1000) - cur))
+                cur = outfile.tell()
+                outfile.write(infile.read())
+
+# Find the overlay dtbs and apply to cpubl-dtb at 4k boundary
+def tegraflash_concat_overlay_dtb():
+    if values['--overlay_dtb'] is None:
+        return
+    dtb_files = values['--overlay_dtb'].split(',')
+    cpubl_dtb = values['--bldtb']
+    if cpubl_dtb != None and os.path.exists(cpubl_dtb):
+        concat_file_4k(cpubl_dtb, dtb_files)
+
+# Update T194 BPMP DTB based on odmdata input
+# bpmp_uphy_config dict format: {"property", [delete/add, is_string, value]}
+def tegraflash_update_t194_bpmp_dtb(bpmp_uphy_config):
+
+    bpmp_dtb = get_partition_filename('bpmp_fw_dtb', 'type')
+    if (values['--bins']):
+        m = re.search('bpmp_fw_dtb[\s]+([\w._-]+)', values['--bins'])
+        if m:
+            bpmp_dtb = m.group(1)
+    if bpmp_dtb == None:
+        info_print('bpmp_dtb does not exist')
+        return
+
+    # Create the backup dtb
+    new_bpmp_dtb = tegraflash_create_backup_file(bpmp_dtb, '_with_odm')
+
+    with open(new_bpmp_dtb, 'rb') as infile:
+        dtb = pyfdt.FdtBlobParse(infile)
+    fdt = dtb.to_fdt()
+
+    uphy_node = fdt.resolve_path("/uphy")
+    if not uphy_node:
+        uphy_node = pyfdt.FdtNode('uphy')
+        root_node = fdt.resolve_path("/")
+        root_node.append(uphy_node)
+
+    for cfg in bpmp_uphy_config.keys():
+        try:
+            uphy_node.remove(cfg)
+        except:
+            pass
+        if bpmp_uphy_config[cfg][0] == 0:
+            if bpmp_uphy_config[cfg][1] == 1:
+                uphy_node.insert(0, pyfdt.FdtPropertyStrings(cfg, [bpmp_uphy_config[cfg][2]]))
+            else:
+                uphy_node.insert(0, pyfdt.FdtProperty(cfg))
+
+    with open(new_bpmp_dtb,'wb') as outfile:
+        outfile.write(fdt.to_dtb())
+
+    with open(os.path.splitext(new_bpmp_dtb)[0] + ".dts",'w') as outfile:
+        outfile.write(fdt.to_dts())
+
+    # Copy the modified bpmp_dtb file to the original bpmp_dtb file
+    shutil.copyfile(new_bpmp_dtb, bpmp_dtb)
+
+# Decode T194 odmdata input from hexadecimal to a list of strings.
+# Separately store configuration needed to update BPMP DTB.
+def process_t194_odmdata():
+    PCIE_XBAR_CFG_NUM_MAX = 25
+    pcie_xbar_config_str = [
+            "PCIE_XBAR_2_1_1_1_2",
+            "PCIE_XBAR_4_1_0_1_2",
+            "PCIE_XBAR_4_1_1_1_2",
+            "PCIE_XBAR_4_0_0_1_2",
+            "PCIE_XBAR_4_1_0_1_2_C1L6",
+            "PCIE_XBAR_4_0_1_1_2",
+            "PCIE_XBAR_4_1_1_1_2_C1L6",
+            "PCIE_XBAR_2_1_1_0_4",
+            "PCIE_XBAR_2_1_1_1_4",
+            "PCIE_XBAR_4_1_0_0_4",
+            "PCIE_XBAR_4_1_0_1_4",
+            "PCIE_XBAR_4_1_1_0_4",
+            "PCIE_XBAR_4_1_1_1_4",
+            "PCIE_XBAR_8_1_0_0_0",
+            "PCIE_XBAR_8_1_0_1_0",
+            "PCIE_XBAR_8_0_0_0_2",
+            "PCIE_XBAR_8_1_1_0_0",
+            "PCIE_XBAR_8_1_1_1_0",
+            "PCIE_XBAR_8_0_1_0_2",
+            "PCIE_XBAR_8_1_0_0_1",
+            "PCIE_XBAR_8_1_0_1_1",
+            "PCIE_XBAR_8_1_0_0_2",
+            "PCIE_XBAR_8_1_0_1_2",
+            "PCIE_XBAR_8_1_1_0_1",
+            "PCIE_XBAR_8_1_1_1_1"
+    ]
+    ufs_config_str = ["UFS_DISABLED", "UFS_x1_L0", "UFS_x1_L1", "UFS_x2"]
+    nvhs_config_str = ["DISABLED", "PCIE", "SLVS_EC", "NVLINK"]
+    odmdata_list = []
+    # {"property", [delete, is_string, value]}
+    bpmp_uphy_config = {}
+
+    odmdata_list = strip_string_list(values['--odmdata'].strip().split(','))
+
+    try:
+        odmdata = int(odmdata_list[0], 0)
+        info_print("odmdata (to decode) = %d" % odmdata)
+        del odmdata_list[0]
+    except:
+       odmdata = None
+
+    if odmdata:
+        # pcie xbar config
+        pcie_xbar_cfg = (odmdata >> 27) & 0x1F
+        if (pcie_xbar_cfg < PCIE_XBAR_CFG_NUM_MAX):
+            val = pcie_xbar_config_str[pcie_xbar_cfg]
+            odmdata_list.append(val)
+            bpmp_uphy_config["pcie-xbar-config"] = [0, 1, val]
+
+        # pcie c0 endpoint enable
+        val = "pcie-c0-endpoint-enable"
+        if (odmdata & (1 << 26)):
+            odmdata_list.append(val)
+            bpmp_uphy_config[val] = [0, 0, ""]
+        else:
+            bpmp_uphy_config[val] = [1, 0, ""]
+
+        # pcie c4 endpoint enable
+        val = "pcie-c4-endpoint-enable"
+        if (odmdata & (1 << 25)):
+            odmdata_list.append(val)
+            bpmp_uphy_config[val] = [0, 0, ""]
+        else:
+            bpmp_uphy_config[val] = [1, 0, ""]
+
+        ufs_cfg = (odmdata >> 23) & 3
+        odmdata_list.append(ufs_config_str[ufs_cfg])
+        bpmp_uphy_config["ufs-config"] =  [0, 1, ufs_config_str[ufs_cfg]]
+
+        val = "sata-enable"
+        if (odmdata & (1 << 22)):
+            odmdata_list.append(val)
+            bpmp_uphy_config[val] = [0, 0, ""]
+        else:
+            bpmp_uphy_config[val] = [1, 0, ""]
+
+        nvhs_cfg = (odmdata >> 20) & 3
+        odmdata_list.append("NVHS_"+nvhs_config_str[nvhs_cfg])
+        bpmp_uphy_config["nvhs-owner"] =  [0, 1, nvhs_config_str[nvhs_cfg]]
+
+        debug_cfg =  (odmdata >> 18) & 3
+        if (debug_cfg == 0):
+            odmdata_list.append("enable-high-speed-uart")
+        elif (debug_cfg == 2):
+            odmdata_list.append("enable-debug-console")
+
+        if (odmdata & (1 << 17)):
+            odmdata_list.append("enable-pmic-wdt")
+
+        if (odmdata & (1 << 16)):
+            odmdata_list.append("enable-denver-wdt")
+
+        if (((odmdata >> 14) & 3) == 1):
+            odmdata_list.append("battery-connected")
+
+        if (odmdata & (1 << 13)):
+            odmdata_list.append("bootloader-locked")
+
+        val = "pcie-c5-endpoint-enable"
+        if (odmdata & (1 << 12)):
+            odmdata_list.append(val)
+            bpmp_uphy_config[val] = [0, 0, ""]
+        else:
+            bpmp_uphy_config[val] = [1, 0, ""]
+
+    odmdata_str = ",".join(odmdata_list)
+    info_print("Odmdata strings: %s" % odmdata_str)
+    info_print("Bpmp odmdata config: %s" % bpmp_uphy_config)
+    return odmdata_str, bpmp_uphy_config
+
+def tegraflash_add_odm_data_to_dtb (odmdata_str, dtb_file):
+    try:
+        odm_list = strip_string_list(odmdata_str.strip().split(','))
+
+        with open(dtb_file, 'rb') as infile:
+            dtb = pyfdt.FdtBlobParse(infile)
+        fdt = dtb.to_fdt()
+
+        chosen_node = fdt.resolve_path("/chosen")
+        if not chosen_node:
+            chosen_node = pyfdt.FdtNode('chosen')
+            root_node = fdt.resolve_path("/")
+            root_node.append(chosen_node)
+
+        if chosen_node._find('odm-data'):
+            chosen_node.remove('odm-data')
+
+        odm_node = pyfdt.FdtNode('odm-data')
+        for prop in odm_list:
+            odm_node.insert(0, pyfdt.FdtProperty(prop))
+
+        chosen_node.append(odm_node)
+
+        with open(dtb_file,'wb') as outfile:
+            outfile.write(fdt.to_dtb())
+
+        with open(os.path.splitext(dtb_file)[0] + ".dts",'w') as outfile:
+            outfile.write(fdt.to_dts())
+
+    except Exception as e:
+        raise tegraflash_exception("Unexpected error in updating: " + dtb_file + ' ' + str(e))
+
 def tegraflash_parse_partitionlayout():
+    if int(values['--chip'], 0) in [0x23]:
+        if values['--concat_cpubl_bldtb'] is True:
+            concatenate_cpubl_bldtb()
+    if int(values['--chip'], 0) in [0x19]:
+        cpubl_dtb = values['--bldtb']
+        if cpubl_dtb is not None:
+            if  values['--odmdata'] is not None:
+                odmdata_str, t194_bpmp_uphy_config = process_t194_odmdata()
+                if t194_bpmp_uphy_config:
+                    tegraflash_update_t194_bpmp_dtb(t194_bpmp_uphy_config)
+                # Add odmdata strings to cpubl dtb
+                cpubl_dtb = tegraflash_create_backup_file(values['--bldtb'], '_with_odm')
+                tegraflash_add_odm_data_to_dtb(odmdata_str, cpubl_dtb)
+            cpubl_dtb = tegraflash_create_backup_file(cpubl_dtb, '_overlay')
+            set_partition_filename('bootloader-dtb', cpubl_dtb)
+            set_partition_filename('bootloader-dtb_b', cpubl_dtb)
+            values['--bldtb'] = cpubl_dtb
+            tegraflash_concat_overlay_dtb()
     info_print('Parsing partition layout')
     command = exec_file('tegraparser')
     command.extend(['--pt', values['--cfg']])
@@ -4028,19 +4378,12 @@ def tegraflash_generate_rcm_message(is_pdf = False):
     info_print('Generating RCM messages')
     soft_fuse_bin = None
 
+    tegraflash_preprocess_configs()
+
     if int(values['--chip'], 0) in [0x19, 0x23]:
         #update stage2 components
         mode = 'zerosbk'
-        sig_type = 'zerosbk'
         filename = values['--applet']
-        if values['--encrypt_key'] is not None:
-            command = exec_file('tegrasign')
-            command.extend(['--key'] + values['--encrypt_key'])
-            command.extend(['--file', filename])
-            command.extend(['--offset', '4096'])
-            run_command(command)
-            filename = os.path.splitext(filename)[0] + '_encrypt' + os.path.splitext(filename)[1]
-
         command = exec_file('tegrahost')
         command.extend(['--chip', values['--chip'], values['--chip_major']])
         command.extend(['--magicid', 'MB1B'])
@@ -4051,32 +4394,33 @@ def tegraflash_generate_rcm_message(is_pdf = False):
 
         tegraflash_get_key_mode()
         mode = tegrasign_values['--mode']
-        filename = values['--applet']
-        key_val = values['--key']
-        offset_val = '2960'
-        length_val = '1136'
-        pkh_val = tegrasign_values['--pubkeyhash']
-        mont_val = None
-        if mode == "pkc":
-            mont_val = tegrasign_values['--getmontgomeryvalues']
-        call_tegrasign(filename, None, mont_val, key_val, length_val, None, offset_val, pkh_val, None, None)
+        if mode == "pkc" or mode == "ec" or mode == "eddsa":
+            filename = values['--applet']
+            key_val = values['--key']
+            offset_val = '2960'
+            length_val = '1136'
+            pkh_val = tegrasign_values['--pubkeyhash']
+            mont_val = None
+            if mode == "pkc":
+                mont_val = tegrasign_values['--getmontgomeryvalues']
+            call_tegrasign(filename, None, mont_val, key_val, length_val, None, offset_val, pkh_val, None, None)
 
-        command = exec_file('tegrahost')
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        if mode == "pkc":
-            sig_type = "oem-rsa"
+            command = exec_file('tegrahost')
+            command.extend(['--chip', values['--chip'], values['--chip_major']])
             command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-            command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
-        signed_file = os.path.splitext(filename)[0] + '.sig'
-        if mode == "ec":
-            sig_type = "oem-ecc"
-            command.extend(['--pubkeyhash', tegrasign_values['--pubkeyhash']])
-        if mode == "zerosbk":
-           signed_file = os.path.splitext(filename)[0] + '.hash'
-           sig_type = "zerosbk"
-        command.extend(['--updatesigheader', filename, signed_file, sig_type])
-        run_command(command)
-        values['--applet'] = filename
+            if mode == "pkc":
+                if os.path.exists(tegrasign_values['--getmontgomeryvalues']):
+                    command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
+            signed_file = os.path.splitext(filename)[0] + '.sig'
+            if mode == "ec":
+                sig_type = "oem-ecc"
+            else:
+                if mode == "eddsa":
+                    sig_type = "oem-eddsa"
+                else :
+                    sig_type = "oem-rsa"
+            command.extend(['--updatesigheader', filename, signed_file, sig_type])
+            run_command(command)
 
         if values['--soft_fuses'] is not None:
             soft_fuse_config = values['--soft_fuses']
@@ -4115,7 +4459,7 @@ def tegraflash_generate_rcm_message(is_pdf = False):
     command.extend(['--download', 'rcm', values['--applet'], '0', '0'])
     run_command(command)
 
-    if values['--encrypt_key'] is not None and int(values['--chip'], 0) == 0x18:
+    if values['--encrypt_key'] is not None:
         info_print('Signing RCM messages')
         key_val = values['--encrypt_key'][0]
         list_val = tegrarcm_values['--list']
@@ -4171,7 +4515,7 @@ def tegraflash_generate_rcm_message(is_pdf = False):
         command.extend(['--setmontgomeryvalues', tegrasign_values['--getmontgomeryvalues']])
     run_command(command)
 
-def tegraflash_update_img_path(cfg_file):
+def tegraflash_update_img_path(cfg_file, image_dirs):
     if os.path.isfile(cfg_file) is False:
         return cfg_file
 
@@ -4181,9 +4525,25 @@ def tegraflash_update_img_path(cfg_file):
     root = xml_tree.getroot()
 
     for fname in root.findall('.//filename'):
+
+        fname.text = fname.text.strip() if fname.text is not None else None
+
+        if (fname.text and image_dirs):
+            # search for image name in given list of directories
+            for dir in image_dirs:
+                dir = os.path.expanduser(dir)
+                file_path = os.path.join(dir, fname.text)
+
+                # Update the absolute file name for the config file, if it is
+                # found in the directory
+                if (os.path.exists(file_path)):
+                    fname.text = file_path
+                    break
+
+        # If the file name exists and it is absolute path
+        # create the simlink from the tegraflash temp directory
+        # and update the config file with just the name of the file
         if fname.text and os.path.split(fname.text)[0]:
-            fname.text = fname.text.lstrip()
-            fname.text = fname.text.rstrip()
             img_path = fname.text
             fname.text = os.path.basename(fname.text)
             tegraflash_symlink(tegraflash_abs_path(img_path), paths['TMP'] + '/' + fname.text)
@@ -4207,6 +4567,7 @@ def tegraflash_ufs_otp(args, otp_args):
     if filename[1] != '.xml':
         raise tegraflash_exception(otp_args[0] + ' is not an xml file')
 
+    tegraflash_preprocess_configs()
     if values['--securedev']:
         tegraflash_send_tboot(args['--applet'])
     else:
@@ -4240,3 +4601,118 @@ def tegraflash_ufs_otp(args, otp_args):
         command.extend([tegraparser_values['--ufs_otp']])
 
     run_command(command)
+
+def parse_indexfile_for_qspi(index_file):
+    with open(index_file, "r") as f:
+        lines = f.readlines()
+        partitions = []
+        prev_device = ''
+        total_devices = 0
+        qspi_device = []
+        device_info = {}
+        cur_dict = {}
+        for line in lines:
+            part = [ i.strip() for i in line.split(',') ]
+            device, instance, name = part[1].split(':')
+            if prev_device != "{}:{}".format(device, instance):
+                total_devices += 1
+                prev_device = "{}:{}".format(device, instance)
+                if device == "3":
+                    qspi_device.append(total_devices - 1)
+                device_info[total_devices - 1] = {"instance": instance, "parts": [], "device": device}
+                cur_dict = device_info[total_devices - 1]
+            cur_dict["parts"].append(part)
+            partitions.append(part)
+
+        return total_devices, qspi_device, partitions, device_info
+
+
+GPT_HEADER_FORMAT = """
+8s signature
+4s revision
+L header_size
+L crc32
+4x _
+Q current_lba
+Q backup_lba
+Q first_usable_lba
+Q last_usable_lba
+16s disk_guid
+Q part_entry_start_lba
+L num_part_entries
+L part_entry_size
+L crc32_part_array
+"""
+
+# http://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_entries_.28LBA_2.E2.80.9333.29
+GPT_PARTITION_FORMAT = """
+16s type
+16s unique
+Q first_lba
+Q last_lba
+Q flags
+72s name
+"""
+
+def _make_fmt(name, format, extras=[]):
+    type_and_name = [l.split(None, 1) for l in format.strip().splitlines()]
+    fmt = ''.join(t for (t,n) in type_and_name)
+    fmt = '<'+fmt
+    tupletype = collections.namedtuple(name, [n for (t,n) in type_and_name if n!='_']+extras)
+    return (fmt, tupletype)
+
+def read_header(data, lba_size=512):
+    # skip MBR
+    fmt, GPTHeader = _make_fmt('GPTHeader', GPT_HEADER_FORMAT)
+    header = GPTHeader._make(struct.unpack(fmt, data[:92]))
+    if header.signature != b"EFI PART":
+        raise tegraflash_exception('Bad signature: %r' % header.signature)
+    if header.revision != b"\x00\x00\x01\x00":
+        raise tegraflash_exception('Bad revision: %r' % header.revision)
+    if header.header_size < 92:
+        raise tegraflash_exception('Bad header size: %r' % header.header_size)
+    header = header._replace(
+        disk_guid=str(uuid.UUID(bytes_le=header.disk_guid)),
+        )
+    return header
+
+def read_partitions(fp, header, lba_size=512):
+    fmt, GPTPartition = _make_fmt('GPTPartition', GPT_PARTITION_FORMAT, extras=['index'])
+    i = 0
+    result = []
+    for idx in range(1, 1 + header.num_part_entries):
+        data = fp[i:i + header.part_entry_size]
+        if len(data) < struct.calcsize(fmt):
+            raise tegraflash_exception('Short partition entry')
+        part = GPTPartition._make(struct.unpack(fmt, data) + (idx,))
+        if part.type == 16*'\x00':
+            continue
+        part = part._replace(
+            type=str(uuid.UUID(bytes_le=part.type)),
+            unique="",
+            # do C-style string termination; otherwise you'll see a
+            # long row of NILs for most names
+            name=part.name.decode('utf-16').split('\0', 1)[0],
+            )
+        result.append(part)
+        i = header.part_entry_size * idx
+    return result
+
+def compareGPT(fileone, filetwo):
+    with open(fileone, "rb") as f, open(filetwo, "rb") as f1:
+        try:
+            fileContent = f.read()
+            gpt = fileContent[-34 * 512:-512]
+            gptheader = fileContent[-512:]
+            header = read_header(gptheader)
+            gpt_one = read_partitions(gpt, header)
+
+            fileContent = f1.read()
+            gpt = fileContent[-34 * 512:-512]
+            gptheader = fileContent[-512:]
+            header = read_header(gptheader)
+            gpt_two = read_partitions(gpt, header)
+
+            return gpt_one == gpt_two
+        except:
+            return False
