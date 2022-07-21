@@ -19,7 +19,10 @@ import subprocess
 import re
 import time
 import traceback
-import yaml
+try:
+    import yaml
+except ImportError:
+    print("WARNING: failed to import yaml")
 
 AES_128_HASH_BLOCK_LEN = 16
 AES_256_HASH_BLOCK_LEN = 16
@@ -178,8 +181,11 @@ class KDF:
     def parse_file(self, p_key, arg, internal):
         kdf_file = arg.split('=')[1]
 
-        with open(kdf_file) as f:
-            params = yaml.safe_load(f)
+        try:
+            with open(kdf_file) as f:
+                params = yaml.safe_load(f)
+        except ImportError:
+            print("WARNING: kdf: yaml unavailable")
 
         tokens = {'IV':'--iv', 'AAD':'--aad', 'VER':None, 'DERSTR':None, 'CHIPID':None,
                   'MAGICID':None, 'FLAG':None, 'BL_DERSTR':None, 'FW_DERSTR':None}
