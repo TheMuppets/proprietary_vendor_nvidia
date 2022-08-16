@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2017-2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # NVIDIA CORPORATION and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -69,15 +69,18 @@ top_var = "TOP"
 
 # BUP magic:
 # Bump it with the BUP version.
-bup_magic = "NVIDIA__BLOB__V2"
+# * V2: The starting version to support bct_ver format
+# * V3: 128 length spec info.
+bup_magic = "NVIDIA__BLOB__V3"
 # BUP vesioin:
 # Bump it when the BUP blob structure updated.
-bup_bcd_ver_maj = 0x2
+# * 3.1: 128 length spec info.
+bup_bcd_ver_maj = 0x3
 bup_bcd_ver_min = 0x1
 # bcdBUP release version (binary coded decimal number):
-# Bump it in yymm when BUP released.
+# Bump it in yymm when BUP is changed in the new release.
 # Use 2106 for the initial release with yymm in version format.
-bup_bcd_ver_yy = 0x21
+bup_bcd_ver_yy = 0x22
 bup_bcd_ver_mm = 0x6
 # BUP release revision:
 # It supports upto 4, and should be reset to 0 once the bcdBUP version is updated.
@@ -311,12 +314,12 @@ class payload():
 
 
 class update_payload(payload):
-    spec_len_max = 64
+    spec_len_max = 128
 
     def __init__(self, arg):
         payload.__init__(self, arg)
         self.blob_type = 0
-        self.entry_packing = '=40sIIII64s'
+        self.entry_packing = '=40sIIII128s'
         self.entry_tuple = ('', 0, 0, 0, 0, '')
         self.param_c = 5
         self.outfile = 'ota.blob'

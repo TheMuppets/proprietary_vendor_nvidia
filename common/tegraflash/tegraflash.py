@@ -65,7 +65,7 @@ exports = {
             "--bct":None, "--bct_cold_boot":None, "--key":'None', "--encrypt_key":None, "--cfg":None, "--bl":None,
             "--board":None, "--eeprom":None, "--cmd":None, "--instance":None, "--bpfdtb":None,
             "--hostbin":None, "--applet":None,"--dtb":None, "--bldtb":None, "--kerneldtb":None, "--chip":None,
-            "--out":None, "--nct":None, "--fb":None, "--odmdata":None, "--overlay_dtb":None,
+            "--out":None, "--nct":None, "--fb":None, "--odmdata":None, "--overlay_dtb":None, "--ecid":None,
             "--lnx":None, "--tos":None, "--eks":None, "--boardconfig":None,
             "--skipuid":False, "--securedev":False, "--keyindex":None, "--keep":False,
             "--wb":None, "--bl-load":None, "--bins":None, "--dev_params":None,
@@ -82,7 +82,9 @@ exports = {
             "--wb0sdram_config":None, "--blversion":None, "--output_dir":None, "--nv_nvratchet":"0",
             "--nv_oemratchet":"0", "--image_dirs":None, "--trim_bpmp_dtb":False, "--cpubl":None,
             "--concat_cpubl_bldtb":False, "--external_device":False, "--cust_info": None,
-            "--fuse_info": None, "--sparseupdate": False,
+            "--fuse_info": None, "--sparseupdate": False, "--ratchet_blob":None, "--applet_softfuse":None,
+            "--secondary_gpt_backup":False, "--boot_chain":None, "--bct_backup":False,
+            "--mb1_bin":None, "--psc_bl1_bin":None,
           }
 
 exit_on_error = False
@@ -90,7 +92,7 @@ exit_on_error = False
 def usage():
     print( '\n'.join([
     '  Usage: tegraflash [--bct <file>] [--bct_cold_boot <file>] [--cfg <file>] [--bl <file>] [--instance <number>]',
-    '                    [--chip <number>] [--dtb <file>] [--bldtb <file>] [--kerneldtb <file>]',
+    '                    [--chip <number>] [--ecid <ecid>] [--dtb <file>] [--bldtb <file>] [--kerneldtb <file>]',
     '                    [--key <file>] [--encrypt_key <file> [--cmd \"commands\"] [--bpfldtb <file>]',
     '                    [--applet <file>] [--nct <file>] [--hostbin <dir>] [--out <dir>]',
     '                    [--boardconfig <file>] [--skipuid] [--securedev] [--keyindex <number>]',
@@ -104,6 +106,8 @@ def usage():
     '                    [--deviceprod_config <file>] [--minratchet_config <file>] [--skipsanitize] [--keep]',
     '                    [--output_dir <dir>] [--external_device], [--odmdata <odmdata|odmdata str>]',
     '                    [--overlay_dtb <dtb files>] [--cust_info <file>] [--sparseupdate]',
+    '                    [--secondary_gpt_backup] [--boot_chain <A|B>] [--bct_backup]',
+    '                    [--mb1_bin] [--psc_bl1_bin]',
     '   ',
     '   --bct           : Bootrom Boot Config Table file',
     '   --bct_cold_boot  : Bootrom Boot Config Table file for cold boot',
@@ -111,6 +115,7 @@ def usage():
     '   --bl            : Command line bootloader',
     '   --bl-load       : Bootloader load/entry address',
     '   --chip          : Chip Id',
+    '   --ecid          : ECID',
     '   --blversion     : Major and Minor version of bootloader loaded by BOOTROM',
     '   --dtb           : DTB file to be used by both (old implementation, to deprecate in future)',
     '   --bldtb         : DTB file to be used by cboot',
@@ -126,7 +131,8 @@ def usage():
     '   --securedev     : path for flashing fused devices',
     '   --keyindex      : FSKP key index',
     '   --cmd           : List of comma(;) separated commands',
-    '   --dev_params    : Boot device parameters',
+    '   --dev_params    : Boot device parameters. It supports multiple files divided by comma for different boot chains',
+    '   --boot_chain    : Selected boot chain',
     '   --sdram_config  : Sdram configuration',
     '   --ramcode       : The ramcode value',
     '   --bins          : List of binaries to be downloaded separated by commad(;)',
@@ -167,7 +173,11 @@ def usage():
     '   --overlay_dtb   : a list of comma seperated dtbs to be applied to base dtb',
     '   --cust_info     : customer data to be filled into BR-BCT',
     '   --fuse_info     : fuse information xml for generating fuse_info binary',
-    '   --sparseupdate  : only flash partitions that have changed. Currently only support SPI flash memory '
+    '   --sparseupdate  : only flash partitions that have changed. Currently only support SPI flash memory ',
+    '   --secondary_gpt_backup : flash secondary GPT backup partition',
+    '   --bct_backup    : flash BCT backup partition as well when flashing BCT partition',
+    '   --mb1_bin       : mb1 bootloader binary to download to bootrom in RCM',
+    '   --psc_bl1_bin   : psc_bl1 binary to download to bootrom in RCM',
     '   '
     ]))
 
@@ -717,7 +727,7 @@ class tegraflashcmds(cmd.Cmd):
                 # Only route the following condition for t234, old chips remain the same path
                 if int(exports['--chip'], 0) == 0x23:
                     if exports['--encrypt_key'] is None:
-                        self.chip_inst.tegraflash_sign(exports, args)
+                        self.chip_inst.tegraflash_sign_binary(exports, args)
                     else:
                         self.chip_inst.tegraflash_encrypt_sign_binary(exports, args)
                 else:
@@ -864,7 +874,7 @@ class tegraflashcmds(cmd.Cmd):
     def do_burnfuses(self, params):
         params = params.replace('  ', ' ')
         args = params.split(' ')
-        if len(args) < 2:
+        if len(args) <= 2:
             tegraflash_update_env()
             compulsory_args = ['--chip', '--applet']
 
@@ -884,16 +894,8 @@ class tegraflashcmds(cmd.Cmd):
         print('\n'.join([
         ' ',
         '----------------------------------------------------------------------',
-        '  T210 Usage: burnfuses',
-        '----------------------------------------------------------------------',
-        '  The command burns a specific set of fuses like TID/LID/SBK/DK/PKC ',
-                '  This is unlike the blowfuses command, which takes requests to set ',
-                '  values for arbitrary fuses, via an xml file input '
-        '----------------------------------------------------------------------',
-        ' ',
-        '----------------------------------------------------------------------',
-        '  T186 Usage: burnfuses <filename.xml> or',
-        '  Usage: burnfuses dummy or',
+        '  T194 / T234 Usage: burnfuses <filename.xml> or',
+        '  Usage: burnfuses dummy [<filename.xml>] or',
         '  Usage: burnfuses fskp ',
         '----------------------------------------------------------------------',
         '  Takes requests to set values for arbitrary fuses via an xml file input ',
@@ -1221,14 +1223,16 @@ if __name__ == '__main__':
                "out=", "chip=", "dtb=", "bldtb=", "kerneldtb=", "bpfdtb=", "nct=", "applet=", "fb=", "odmdata=", "overlay_dtb=",
                "lnx=", "tos=", "eks=", "boardconfig=", "securedev", "keyindex=", "wb=", "keep", "secureboot",
                "bl-load=", "bins=", "dev_params=", "sdram_config=", "ramcode=", "misc_config=", "misc_cold_boot_config=",
-               "mb1_bct=", "mb2_bct=", "mb2_cold_boot_bct=", "mb2bct_cfg=",
+               "mb1_bct=", "mb2_bct=", "mb2_cold_boot_bct=", "mb2bct_cfg=", "ecid=",
                "pinmux_config=", "scr_config=", "scr_cold_boot_config=",
                "pmc_config=", "pmic_config=", "gpioint_config=", "uphy_config=", "br_cmd_config=",
                "prod_config=", "device_config=", "applet-cpu=", "bpf=", "skipsanitize",
                "encrypt_key=", "nv_key=", "nvencrypt_key=", "cl=", "soft_fuses=", "cust_info=", "fuse_info=",
                "deviceprod_config=", "rcm_bct=","mem_bct=", "mem_bct_cold_boot=", "mb1_cold_boot_bct=", "wb0sdram_config=",
                "minratchet_config=", "blversion=", "output_dir=", "nv_nvratchet=", "nv_oemratchet=", "image_dirs=",
-               "trim_bpmp_dtb", "cpubl=", "concat_cpubl_bldtb", "external_device", "sparseupdate" ]
+               "trim_bpmp_dtb", "cpubl=", "concat_cpubl_bldtb", "external_device", "sparseupdate", "ratchet_blob=",
+               "applet_softfuse=", "secondary_gpt_backup", "boot_chain=", "bct_backup",
+               "mb1_bin=", "psc_bl1_bin="]
 
     try:
       opts, args = getopt.getopt(sys.argv[1:], "h", options)
@@ -1265,9 +1269,14 @@ if __name__ == '__main__':
     if '--concat_cpubl_bldtb' in sys.argv[1:]:
         exports['--concat_cpubl_bldtb'] = True
 
+    if '--secondary_gpt_backup' in sys.argv[1:]:
+        exports['--secondary_gpt_backup'] = True
+
+    if '--bct_backup' in sys.argv[1:]:
+        exports['--bct_backup'] = True
 
     abs_path = ['--bct', '--rcm_bct', '--cfg', '--bl', '--hostbin', '--key', '--encrypt_key', '--out', '--dtb', '--bldtb', '--kerneldtb',
-                '--nct', '--applet', '--fb', '--lnx', '--tos', '--eks', '--wb', '--bpfdtb',
+                '--nct', '--applet', '--fb', '--lnx', '--tos', '--eks', '--wb', '--bpfdtb', '--applet_softfuse',
                 '--boardconfig', '--applet-cpu', '--bpf', '--mb1_bct', '--mb2_bct', '--encrypt_key', '--nvencrypt_key', '--nv_key',
                 '--mem_bct', '--mem_bct_cold_boot', '--mb1_cold_boot_bct', '--mb2_cold_boot_bct', '--wb0sdram_config']
     for path in abs_path:

@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 #
-# Copyright (c) 2018-2021, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2022, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -19,10 +19,7 @@ import subprocess
 import re
 import time
 import traceback
-try:
-    import yaml
-except ImportError:
-    print("WARNING: failed to import yaml")
+import yaml
 
 AES_128_HASH_BLOCK_LEN = 16
 AES_256_HASH_BLOCK_LEN = 16
@@ -35,6 +32,8 @@ NV_ECC521_SIG_STRUCT_SIZE = 136
 ED25519_KEY_SIZE = 32
 ED25519_SIG_SIZE = 64
 XMSS_KEY_SIZE = 132
+RSA3K_KEY_SIZE = 384
+PCP_SIZE = 384
 
 MAX_KEY_LIST = 3
 
@@ -170,25 +169,26 @@ class KDF:
         self.tag = Token()
         self.verify = 0
         self.label = Token()
-        self.bl_label = Token()
-        self.fw_label = Token()
-        self.context = Token()
+        self.bl_label = Token('0000000000000000')
+        self.fw_label = Token('0000000000000000')
+        self.tz_label = Token('0000000000000000')
+        self.gp_label = Token('0000000000000000')
+        self.context = Token('0000000000000000')
         self.chipid = ''
-        self.magicid = ''
+        self.dk = None
+        self.magicid = None
         self.type = KdfType.CBC
         self.msg = None
 
     def parse_file(self, p_key, arg, internal):
         kdf_file = arg.split('=')[1]
 
-        try:
-            with open(kdf_file) as f:
-                params = yaml.safe_load(f)
-        except ImportError:
-            print("WARNING: kdf: yaml unavailable")
+        with open(kdf_file) as f:
+            params = yaml.safe_load(f)
 
         tokens = {'IV':'--iv', 'AAD':'--aad', 'VER':None, 'DERSTR':None, 'CHIPID':None,
-                  'MAGICID':None, 'FLAG':None, 'BL_DERSTR':None, 'FW_DERSTR':None}
+                  'MAGICID':None, 'FLAG':None, 'BL_DERSTR':None, 'FW_DERSTR':None,
+                  'TZ_DERSTR':None, 'GP_DERSTR':None, 'DERKEY':None,}
         for token in tokens:
             if token in params:
                 # Update the entries if they are found in internal dict
@@ -199,18 +199,32 @@ class KDF:
                 elif token == 'CHIPID':
                     self.chipid = params.get(token)
                 elif token == 'FLAG':
-                    self.flag = DerKey.SBK_PT if params.get(token).upper() == 'SBK_PT' else DerKey.SBK_WRAP
+                    flag_val = params.get(token).upper()
+                    if flag_val == 'DEV':
+                        self.flag = DerKey.DEV
+                    elif flag_val == 'SBK_PT':
+                        self.flag = DerKey.SBK_PT
+                    elif flag_val == 'SBK_WRAP':
+                        self.flag = DerKey.SBK_WRAP
+                    else:
+                        raise tegrasign_exception('Unknown %s parsed from %s' %(flag_val, kdf_file))
                 elif token == 'VER':
                     self.context.parse(params.get(token))
                 elif token == 'IV':
                     if params.get(token).lower() != 'random': # Will generate random iv later
                         self.iv.parse(params.get(token))
+                elif token == 'DERKEY':
+                    self.dk = params.get(token)
                 elif token == 'DERSTR':
                     self.label.parse(params.get(token))
                 elif token == 'BL_DERSTR':
                     self.bl_label.parse(params.get(token))
                 elif token == 'FW_DERSTR':
                     self.fw_label.parse(params.get(token))
+                elif token == 'TZ_DERSTR':
+                    self.tz_label.parse(params.get(token))
+                elif token == 'GP_DERSTR':
+                    self.gp_label.parse(params.get(token))
                 elif token == 'MAGICID':
                     self.magicid = params.get(token)
 
@@ -218,7 +232,7 @@ class KDF:
         p_key.filename = internal['--key']
         p_key.mode = NvTegraSign_FSKP
         if internal['--hsm']:
-            p_key.hsm.type == KeyType.FSKP
+            p_key.mode = p_key.hsm.type
         else:
             p_key.hsm.type == KeyType.UNKNOWN
         internal["--enc"] = 'aesgcm'
@@ -295,8 +309,16 @@ class KdfArg:
     FLAG   = 4
     DKSTR  = 5 # derivation string for DK
     DKVER  = 6 # version for DK
-    BLSTR  = 7 # derivation label for BL_(DEC)_KDK
-    FWSTR  = 8 # derivation label for FW_(DEC)_KDK
+    BLSTR  = 7 # derivation label for BL_KDK
+    FWSTR  = 8 # derivation label for FW_KDK
+    TZSTR  = 9 # derivation label for TZ_KDK
+    GPSTR  = 10# derivation label for GP_KDK
+
+class RanArr:
+    def __init__(self):
+        self.count = 1 # Default to 1
+        self.size = 0
+        self.buf = None
 
 class SignKey:
     def __init__(self):
@@ -306,17 +328,28 @@ class SignKey:
         self.keysize = 16
         self.kdf = KDF()
         self.hsm = HSM()
+        self.ran = RanArr()
         self.len = 0
         self.off = 0
+        self.pk_file = None
         self.src_file = None
         self.src_buf = None
         self.src_size = 0
+        self.block_size = "0"
+
+    def parse_random(self, opts, filename):
+        if filename != None:
+            self.filename = filename
+        if len(opts) > 1:
+            self.ran.count = int(opts[1])
+        self.ran.size = int(opts[0])
 
     def parse_hsm(self, hsm, mode):
         self.hsm.parse(hsm, mode)
 
-    def parse(self, src_file, length, offset):
+    def parse(self, src_file, length, offset, block_size):
         self.src_file = src_file
+        self.block_size = block_size
         (self.src_buf, self.src_size, self.len, self.off) = check_len_off(src_file, length, offset)
 
     def validate_hsmmode(self):
@@ -423,6 +456,14 @@ def isPython3():
         return True
 
     return False
+
+'''
+To generate and return a bytearray of random numbers for the given count length
+'''
+def random_gen(count):
+    # generate bytearray of random numbers for the given count length
+    return os.urandom(count)
+
 
 '''
 If use_verbose is True and '--verbose' is set, then proceed to:
@@ -663,10 +704,6 @@ def is_ret_ok(ret_str):
 Checks to see if the given aes key is a string of zeros or not
 '''
 def is_zero_aes(p_key):
-    if is_hsm():
-        from tegrasign_v3_hsm import is_zero_aes_hsm
-        return is_zero_aes_hsm(p_key)
-
     for b in p_key.key.aeskey:
         if b != 0:
             return False
@@ -740,6 +777,73 @@ def check_len_off(filename, length, offset):
         exit_routine()
 
     return (file_buf, file_size, length, offset)
+
+'''
+Parse the --pubkeyhash arguments
+'''
+def get_pkh_args(internal):
+    pk = None
+    phk = None
+    mode = None
+    if (type(internal["--pubkeyhash"]) == list):
+        len_ = 0 if (internal["--pubkeyhash"] == None) else len(internal["--pubkeyhash"])
+        if len_ > 2:
+            mode = internal["--pubkeyhash"][2]
+        if len_ > 1:
+            phk = internal["--pubkeyhash"][1]
+        if len_ > 0:
+            pk = internal["--pubkeyhash"][0]
+    else:
+        # Pass in as string, then only define for pk
+        pk = internal["--pubkeyhash"]
+    if mode != None and len(mode) > 0:
+        mode_list = {'rsa': NvTegraSign_PKC, 'ecdsa': NvTegraSign_ECC,
+            'eddsa': NvTegraSign_ED25519, 'xmss': NvTegraSign_XMSS}
+        mode = mode_list.get(mode.lower(), None)
+
+    return pk, phk, mode
+
+'''
+Prints the public key hash in tegra-fuse format
+'''
+def print_pcp(arr):
+    arr_str = hex_to_str(arr)
+    info_print('tegra-fuse format (big-endian): 0x%s' %(arr_str))
+
+'''
+Prints the public key hash in the fuse setting format for fusebypass
+'''
+def print_pcp_entries(arr, mode):
+    arr_str = hex_to_str(arr)
+    n = len(arr_str)
+
+    if n % 4 != 0:
+        return
+    lines = ''
+    entry_line = ''
+
+    # Process 4 bytes at a time
+    info_print('vdk fuse bypass format:')
+    for i in range(0, int(n/8)):
+        line = 'FUSE_PUBLIC_KEY%i=0x%s ' %(i, hex_to_str(swapbytes(bytearray(arr[i*4:(i+1)*4]))))
+
+        lines += line
+        entry_line += line
+        if (i+1) %4 == 0:
+            if mode == NvTegraSign_PKC:
+                info_print('        self.pkc += " %s"' %(entry_line))
+            elif mode == NvTegraSign_ECC:
+                info_print('        self.ecdsa += " %s"' %(entry_line))
+            elif mode == NvTegraSign_ED25519:
+                info_print('        self.eddsa += " %s"' %(entry_line))
+            else:
+                info_print('        self.xmss += " %s"' %(entry_line))
+            entry_line = ''
+
+    lines = ''
+    info_print('fuse bypass format:')
+    for i in range(0, int(n/8)):
+        info_print('FAB_ENTRY(PUBLIC_KEY%i, PUBLIC_KEY%i, 0x%s),' %(i, i, hex_to_str(swapbytes(bytearray(arr[i*4:(i+1)*4])))))
 
 '''
    verify_opt: if = 1 to decrypt the buffer

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2021, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2022, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -12,11 +12,11 @@ import shutil
 from xml.etree import ElementTree
 from tegrasign_v3_util import *
 
-def compute_sha(type, filename, offset, length):
+def compute_sha(type, filename, offset, length, blockSize="0"):
     if type == 'sha256':
-        return do_sha((256/8), filename, offset, length)
+        return do_sha((256/8), filename, offset, length, blockSize)
     else:
-        return do_sha((512/8), filename, offset, length)
+        return do_sha((512/8), filename, offset, length, blockSize)
 
 '''
 Perform based on the node define
@@ -268,7 +268,7 @@ def sign_files_internal(p_keylist, filenode, pkh, mont, sha_type, iv):
 
 def sign_files_in_list(p_keylist, internal):
     filelistname = internal["--list"]
-    pkh = internal["--pubkeyhash"]
+    pkh, _, _= get_pkh_args(internal)
     mont = internal["--getmontgomeryvalues"]
     iv = internal["--iv"]
     sha_type = internal["--sha"]
@@ -310,7 +310,7 @@ def sign_single_file(p_key, internal):
     length = internal["--length"]
     enc_type = internal["--enc"]
     sign_type = internal["--sign"]
-    pkh = internal["--pubkeyhash"]
+    pkh, _, _ = get_pkh_args(internal)
     mont = internal["--getmontgomeryvalues"]
     iv = internal["--iv"]
     aad = internal["--aad"]
@@ -344,6 +344,7 @@ def sign_single_file(p_key, internal):
 
         buff_hash = "0" * AES_128_HASH_BLOCK_LEN
         buff_enc = bytearray(buff_to_sign)
+        is_hash = False
 
         if ((enc_type == None or enc_type == 'None') or is_zero_aes(p_key)):
             info_print('Skipping encryption: ' + filename, True)
@@ -357,8 +358,10 @@ def sign_single_file(p_key, internal):
 
         if sign_type == 'hmacsha256':
             buff_hash = do_hmac_sha256(buff_enc, length, p_key)
-        else:
+            is_hash = True
+        elif enc_type != 'aesgcm': # cmac is not for aesgcm
             buff_hash = do_aes_cmac(buff_enc, length, p_key)
+            is_hash = True
 
         buff_data = buff_data[0:offset] + buff_enc + buff_data[offset + length:]
 
@@ -368,11 +371,12 @@ def sign_single_file(p_key, internal):
         write_file(enc_fh, buff_data)
         enc_fh.close()
 
-        # save hash to *.hash file
-        hash_file_name = os.path.splitext(filename)[0] + '.hash'
-        hash_fh = open_file(hash_file_name, 'wb')
-        write_file(hash_fh, buff_hash)
-        hash_fh.close()
+        if is_hash == True:
+            # save hash to *.hash file
+            hash_file_name = os.path.splitext(filename)[0] + '.hash'
+            hash_fh = open_file(hash_file_name, 'wb')
+            write_file(hash_fh, buff_hash)
+            hash_fh.close()
 
     elif p_key.mode == NvTegraSign_FSKP:
 
@@ -381,8 +385,9 @@ def sign_single_file(p_key, internal):
 
         buff_hash = "0" * AES_256_HASH_BLOCK_LEN
         buff_enc = bytearray(buff_to_sign)
+        is_hash = False
 
-        if ((enc_type == None or enc_type == 'None') or is_zero_aes(p_key)):
+        if not is_hsm() and ((enc_type == None or enc_type == 'None') or is_zero_aes(p_key)):
             info_print('Skipping encryption: ' + filename, True)
         elif (enc_type == 'aescbc'):
             buff_enc = do_aes_cbc(buff_to_sign, length, p_key, iv)
@@ -394,8 +399,10 @@ def sign_single_file(p_key, internal):
 
         if sign_type == 'hmacsha256':
             buff_hash = do_hmac_sha256(buff_enc, length, p_key)
-        else:
+            is_hash = True
+        elif enc_type != 'aesgcm': # cmac is not for aesgcm
             buff_hash = do_aes_cmac(buff_enc, length, p_key)
+            is_hash = True
 
         buff_data = buff_data[0:offset] + buff_enc + buff_data[offset + length:]
 
@@ -405,11 +412,12 @@ def sign_single_file(p_key, internal):
         write_file(enc_fh, buff_data)
         enc_fh.close()
 
-        # save hash to *.hash file
-        hash_file_name = os.path.splitext(filename)[0] + '.hash'
-        hash_fh = open_file(hash_file_name, 'wb')
-        write_file(hash_fh, buff_hash)
-        hash_fh.close()
+        if is_hash == True:
+            # save hash to *.hash file
+            hash_file_name = os.path.splitext(filename)[0] + '.hash'
+            hash_fh = open_file(hash_file_name, 'wb')
+            write_file(hash_fh, buff_hash)
+            hash_fh.close()
 
     elif p_key.mode == NvTegraSign_ECC:
 
@@ -443,25 +451,9 @@ def sign_single_file(p_key, internal):
         write_file(sig_fh, sig_data)
         sig_fh.close()
     return 0
-'''
-To generate and return a bytearray of random numbers for the given count length
-'''
-def random_gen(count):
-    import random
-    # generate bytearray of random numbers for the given count length
-    random_array = bytearray(count)
-    for i in range(count):
-        x = random.randint(0, 255)
-        random_array[i] = x
-
-    return random_array
 
 def do_aes_cmac(buff_to_sign, length, p_key):
     buff_sig = "0" * 16 # note cmac will always return 128bit
-
-    if is_hsm():
-        from tegrasign_v3_hsm import do_aes_cmac_hsm
-        return do_aes_cmac_hsm(buff_to_sign, p_key)
 
     base_name =  script_dir + 'v3_cmac_' + pid
     raw_name = base_name + '.raw'
@@ -566,10 +558,6 @@ def do_hmac_sha256(buff_to_sign, length, p_key):
     return buff_dgst
 
 def do_aes_cbc(buff_to_enc, length, p_key, iv):
-
-    if is_hsm():
-        from tegrasign_v3_hsm import do_aes_cbc_hsm
-        return do_aes_cbc_hsm(buff_to_enc, p_key)
 
     buff_sig = "0" * 16
     base_name = script_dir + 'v3_cbc_' + pid
@@ -868,7 +856,7 @@ def do_xmss(buff_to_sign, p_key, pkh):
         os.remove(result_name)
     return buff_sig
 
-def do_sha(sha_cnt, filename, offset, length):
+def do_sha(sha_cnt, filename, offset, length, blockSize):
 
     sha_fh = open_file(filename, 'rb')
     buff_data = sha_fh.read()
@@ -918,6 +906,8 @@ def do_sha(sha_cnt, filename, offset, length):
 
     command = exec_file(TegraOpenssl)
     command.extend(['--sha', raw_name])
+    if blockSize != "0":
+        command.extend(['--block', blockSize])
 
     ret_str = run_command(command)
     if check_file(hash_file_name):
@@ -926,7 +916,7 @@ def do_sha(sha_cnt, filename, offset, length):
     os.remove(raw_name)
     return hash_file_name
 
-def extract_AES_key(pBuffer, BufSize, p_key):
+def extract_AES_key(pBuffer, p_key):
 
     # Process the content as binary format
     if not b'0' in pBuffer:
@@ -1050,6 +1040,8 @@ def is_PKC_key(keyfilename, p_key, pkh, mont):
     return False
 
 def is_ECC_key(keyfilename, p_key, pkh):
+    if is_hsm():
+        return False #TODO: Not supported
 
     command = exec_file(TegraOpenssl)
 
@@ -1249,16 +1241,20 @@ def do_kdf(params_slist, kdf_list):
     os.remove(raw_name)
     return False
 
-def do_derive_dk(dk, params, kdf_list, chipid):
+def do_derive_dk(dk, params, kdf_list, p_key):
     dk_list = params['DK']
 
     if dk in dk_list:
-        if chipid == '0x230':
+        if p_key.kdf.chipid == '0x230':
             params_slist = do_kdf_params_t234(dk, params, kdf_list)
-            return do_kdf(params_slist, kdf_list)
+        else:
+            from tegrasign_v3_nvkey_load import do_kdf_params
+            return do_kdf_params(dk, params, kdf_list)
+
+        return do_kdf(params_slist, kdf_list)
     raise tegrasign_exception('Can not derive %s' % (dk))
 
-def do_kdf_params_oem(dk, params, kdf_list):
+def do_kdf_params_oem(dk, params, kdf_list, p_key):
     # Note some kdf is using string operation, some are hex operation
     is_hex = True
     is_str = False
@@ -1268,14 +1264,15 @@ def do_kdf_params_oem(dk, params, kdf_list):
     dk_params = params['DK'][dk]
     dk_ctx = {
         "KDK" : dk_params['KDK'],
-        'Label'   : hex_to_str(kdf_list[KdfArg.DKSTR]), # Note this is passed in
-        'Context' : hex_to_str(kdf_list[KdfArg.DKVER]), # Note this is passed in
+        'Label'   : p_key.kdf.label.get_strbuf(),
+        'Context' : p_key.kdf.context.get_strbuf(),
     }
 
     dk_ctx["Msg"] = get_composed_msg(dk_ctx['Label'], dk_ctx['Context'], L, is_hex)
 
     kdk_params = params['KDK'][dk_ctx['KDK']]
     kdk_to_use = kdk_params['KDK']
+    kdk_upstream = kdk_to_use
     kdk_ctx = {
         "KDK" : kdk_to_use,
         "Label" : kdk_params["Label"],
@@ -1284,34 +1281,77 @@ def do_kdf_params_oem(dk, params, kdf_list):
     kdk_ctx['Msg'] = get_composed_msg(kdk_ctx['Label'], '', L, is_str)
     bl_kdk_ctx = {}
     fw_kdk_ctx = {}
+    gp_kdk_ctx = {}
+    gpto_kdk_ctx = {}
+    tz_kdk_ctx = {}
+    bl_kdk_ctx['Msg'] = None
+    fw_kdk_ctx['Msg'] = None
+    gp_kdk_ctx['Msg'] = None
+    gpto_kdk_ctx['Msg'] = None
+    tz_kdk_ctx['Msg'] = None
+    count = 5
+    while kdk_to_use in ['SBK_NVMB_KDK', 'SBK_TZ_KDK', 'SBK_GP_KDK', 'SBK_GP_TOSB_KDK', 'SBK_FW_KDK'] and (count>0):
+        # Check if sbk_bl_kdk is defined for this dk
+        if 'SBK_NVMB_KDK' in kdk_to_use:
+            bl_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = bl_kdk_params['KDK']
 
-    # Check if sbk_bl_kdk is defined for this dk
-    if 'SBK_' in kdk_to_use:
-        bl_kdk_params = params['KDK'][kdk_ctx['KDK']]
-        kdk_to_use = bl_kdk_params['KDK']
-        bl_kdk_ctx = {
-            'KDK'   : kdk_to_use,
-            'Label' : hex_to_str(kdf_list[KdfArg.BLSTR]),    # Note this is passed in
-        }
+            if p_key.kdf.chipid == '0x230':
+                bl_kdk_ctx = {
+                    'KDK'   : kdk_to_use,
+                    'Label' : p_key.kdf.bl_label.get_strbuf(),
+                }
+                bl_kdk_ctx['Msg'] = get_composed_msg(bl_kdk_ctx['Label'], '', L, is_hex)
+            else:
+                bl_kdk_ctx = {
+                    'KDK'   : kdk_to_use,
+                    'Label' : bl_kdk_params['Label'],
+                    'Context' : p_key.kdf.bl_label.get_strbuf(),
+                }
+                bl_kdk_ctx['Msg'] = get_composed_msg(bl_kdk_ctx['Label'], bl_kdk_ctx['Context'], L, False)
 
-        bl_kdk_ctx['Msg'] = get_composed_msg(bl_kdk_ctx['Label'], '', L, is_hex)
+        elif 'SBK_TZ_KDK' in kdk_to_use:
+            tz_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = tz_kdk_params['KDK']
+            tz_kdk_ctx = {
+                'KDK'   : kdk_to_use,
+                'Label' : p_key.kdf.tz_label.get_strbuf()
+            }
+
+            tz_kdk_ctx['Msg'] = get_composed_msg(tz_kdk_ctx['Label'], '', L, is_hex)
+
+        elif 'SBK_GP_KDK' in kdk_to_use:
+            gp_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = gp_kdk_params['KDK']
+            gp_kdk_ctx = {
+                'KDK'   : kdk_to_use,
+                'Label' : p_key.kdf.gp_label.get_strbuf()
+            }
+
+            gp_kdk_ctx['Msg'] = get_composed_msg(gp_kdk_ctx['Label'], '', L, is_hex)
+
+        elif 'SBK_GP_TOSB_KDK' in kdk_to_use:
+            gpto_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = gpto_kdk_params['KDK']
+            gpto_kdk_ctx = {
+                'KDK'   : kdk_to_use,
+                'Label' : '544F5342', # 'TOSB'
+            }
+
+            gpto_kdk_ctx['Msg'] = get_composed_msg(gpto_kdk_ctx['Label'], '', L, is_hex)
 
         # Check if sbk_fw_kdk is defined for this dk
-        if 'SBK_' in kdk_to_use:
-            fw_kdk_params = params['KDK'][bl_kdk_ctx['KDK']]
+        elif 'SBK_FW_KDK' in kdk_to_use:
+            fw_kdk_params = params['KDK'][kdk_to_use]
             kdk_to_use = fw_kdk_params['KDK']
             fw_kdk_ctx = {
                 "KDK"   : kdk_to_use,
-                "Label" : hex_to_str(kdf_list[KdfArg.FWSTR]), # Note this is passed in
+                "Label" : p_key.kdf.fw_label.get_strbuf(),
             }
 
             fw_kdk_ctx['Msg'] = get_composed_msg(fw_kdk_ctx['Label'], '', L, is_hex)
-        else:
-            fw_kdk_ctx['Msg'] = None
 
-    else:
-        bl_kdk_ctx['Msg'] = None
-        fw_kdk_ctx['Msg'] = None
+        count = count - 1
 
     aes_params = params['AES'][kdk_to_use]
     aes_iv = manifest_xor_offset(basic_params[aes_params['IV']], aes_params["Offset"])
@@ -1332,14 +1372,33 @@ def do_kdf_params_oem(dk, params, kdf_list):
     while (len(kdf_list) > KdfArg.DKSTR):
         kdf_list.pop()
 
+    # Replace sbk key str if the sbk key file is found
+    sbk_keystr = aes_params["Plain"]
+    if p_key.filename != None and os.path.exists(p_key.filename):
+        with open(p_key.filename, 'rb') as f:
+            key_buf = bytearray(f.read())
+            if extract_AES_key(key_buf, p_key):
+                sbk_keystr = hex_to_str(p_key.key.aeskey)
 
-    return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, aes_params["Plain"], dec_kdk_ctx["Msg"],
-            bl_kdk_ctx["Msg"], kdk_ctx["Msg"], dk_ctx["Msg"]]
+    return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, sbk_keystr, dec_kdk_ctx['Msg'],
+            bl_kdk_ctx['Msg'], tz_kdk_ctx['Msg'], gp_kdk_ctx['Msg'], gpto_kdk_ctx['Msg'],  kdk_ctx['Msg'], dk_ctx['Msg']]
 
-def do_kdf_oem(params_slist, kdf_list):
+def do_kdf_oem(params_slist, kdf_list, blockSize):
     if is_hsm():
         from tegrasign_v3_hsm import do_kdf_oem_hsm
-        return do_kdf_oem_hsm(params_slist, kdf_list)
+        p_key = SignKey()
+        p_key.hsm.type = KeyType.SBK
+        p_key.kdf.flag = kdf_list[KdfArg.FLAG]
+        p_key.kdf.iv.set_buf(kdf_list[KdfArg.IV])
+        p_key.kdf.aad.set_buf(kdf_list[KdfArg.AAD])
+        p_key.kdf.tag.set_buf(kdf_list[KdfArg.TAG])
+        p_key.src_buf = kdf_list[KdfArg.SRC]
+        p_key.block_size = int(blockSize)
+        if do_kdf_oem_hsm(params_slist, p_key) == True:
+            kdf_list[KdfArg.SRC] = p_key.src_buf
+            kdf_list[KdfArg.TAG] = p_key.kdf.tag.get_hexbuf()
+            return True
+        return False
 
     base_name = script_dir + 'v3_aeskdf_' + pid
     raw_name = base_name + '.raw'
@@ -1347,7 +1406,8 @@ def do_kdf_oem(params_slist, kdf_list):
     raw_file = open_file(raw_name, 'wb')
 
     # to write to file
-    # order: sizes then data for: deckdk_kdkkdd, deckdk_iv, deckdk_aad, deckdk_plain, deckdk_msg, kdk_msg, dk_msg, iv, aad, tag, src, flag, result_name
+    # order: sizes then data for: deckdk_kdkkdd, deckdk_iv, deckdk_aad, deckdk_plain, deckdk_msg, tzkdk_msg, gpkdk_msg,
+    #        gptokdk_msg, kdk_msg, dk_msg, iv, aad, tag, src, flag, result_name
 
     for param in params_slist:
         if param == None:
@@ -1382,6 +1442,8 @@ def do_kdf_oem(params_slist, kdf_list):
 
     command = exec_file(TegraOpenssl)
     command.extend(['--kdfoem', raw_name])
+    if blockSize  != "0":
+        command.extend(['--block', str(blockSize)])
 
     ret_str = run_command(command)
 
@@ -1404,16 +1466,20 @@ def do_kdf_oem(params_slist, kdf_list):
     os.remove(raw_name)
     return False
 
-def do_derive_dk_oem(dk, params, kdf_list, chipid):
+def do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize):
     dk_list = params['DK']
 
     if dk in dk_list:
-        params_slist = do_kdf_params_oem(dk, params, kdf_list)
+        params_slist = do_kdf_params_oem(dk, params, kdf_list, p_key)
 
-        return do_kdf_oem(params_slist, kdf_list)
+        return do_kdf_oem(params_slist, kdf_list, blockSize)
     raise tegrasign_exception('Can not derive %s' % (dk))
 
-def map_bin_to_dk_oem(enc_file, params, magicid):
+def map_bin_to_dk_oem(p_key, params):
+    if p_key.kdf.dk != None:
+        return p_key.kdf.dk
+    enc_file = p_key.src_file
+    magicid = p_key.kdf.magicid
     basename = os.path.splitext(os.path.basename(enc_file))[0].lower()
     ext = os.path.splitext(os.path.basename(enc_file))[1].lower()
 
@@ -1443,6 +1509,9 @@ def map_bin_to_dk_oem(enc_file, params, magicid):
 
     if 'eks' in basename:
         return 'SBK_EKS_DK'
+
+    if 'fsi' in basename:
+        return 'SBK_FSI_DK'
 
     if 'ist' in basename and 'config' in basename: # This is IST-CONFIG
         return 'SBK_IST_CONFIG_DK'
@@ -1496,17 +1565,29 @@ def map_bin_to_dk_oem(enc_file, params, magicid):
     if 'sc7' in basename:
         return 'SBK_SC7_RF_DK'
 
+    if 'sce' in basename:
+        return 'SBK_SCE_DK'
+
     if 'spe' in basename:
         return 'SBK_SPE_DK'
 
+    if 'tz' in basename and 'vault' in basename:
+        return 'SBK_TZ_VAULT_DK'
+
     if 'tos' in basename:
-        return 'SBK_TOS_DK'
+        return 'SBK_TOSB_DK'
 
     if 'tsec' in basename:
         return 'SBK_TSEC_DK'
 
     if 'uefi' and 'jetson' in basename:
         return 'SBK_CPU_BL_DK'
+
+    if 'xusb'in basename:
+        return 'SBK_XUSB_DK'
+
+    if 'os' in basename or 'hv' in basename:
+        return 'SBK_OS_DK'
 
     if magicid != None:
         # To find the DK for this magic id
@@ -1522,17 +1603,25 @@ def map_bin_to_dk_oem(enc_file, params, magicid):
                        return dk
     raise tegrasign_exception('Can not identify the key choice for %s' % (enc_file))
 
-def load_params_oem(enc_file, chipid, magicid):
-    import yaml
-    cfg_file = 'tegrasign_v3_oemkey.yaml'
+def load_params_oem(p_key):
+    chipid = p_key.kdf.chipid
+    if p_key.kdf.chipid == '0x230':
+        import yaml
+        cfg_file = 'tegrasign_v3_oemkey.yaml'
+        if os.path.exists(cfg_file) == False:
+            cfg_file = script_dir + 'tegrasign_v3_oemkey.yaml'
+        with open(cfg_file) as f:
+            params = yaml.safe_load(f)
+        dk = map_bin_to_dk_oem(p_key, params['DER_OEM'][chipid])
+        return dk, params['DER_OEM'][chipid]
 
-    with open(cfg_file) as f:
-        params = yaml.safe_load(f)
+    else:
+        from tegrasign_v3_nvkey_load import load_params_oem_stage
+        params = load_params_oem_stage(p_key)
+        dk = map_bin_to_dk_oem(p_key, params)
+        return dk, params
 
-    dk = map_bin_to_dk_oem(enc_file, params['DER_OEM'][chipid], magicid)
-    return dk, params['DER_OEM'][chipid]
-
-def do_kdf_cbc(p_key):
+def do_derive_cbc(p_key):
     # Note some kdf is using string operation
     is_hex = False
     L = 128 # key length in bits
@@ -1580,6 +1669,22 @@ def do_kdf_cbc(p_key):
         return True
     return False
 
+def do_random(p_key):
+    if is_hsm():
+        from tegrasign_v3_hsm import do_random_hsm
+        do_random_hsm(p_key)
+    else:
+        p_key.ran.buf = bytearray(p_key.ran.size * p_key.ran.count)
+        for i in range(p_key.ran.count):
+            buf = random_gen(p_key.ran.size)
+            start = i * p_key.ran.size
+            p_key.ran.buf[start:start+p_key.ran.size] = buf[:]
+        info_print('Generated random strings: %s ' %(hex_to_str(p_key.ran.buf)))
+
+    if p_key.filename != 'Unknown':
+        with open(p_key.filename, "wb") as f:
+            f.write(p_key.ran.buf)
+
 def do_derive_hmacsha(p_key):
     if is_hsm():
         from tegrasign_v3_hsm import do_derive_hmacsha_hsm
@@ -1619,31 +1724,24 @@ def do_derive_aesgcm(p_key, internal):
     with open(tag_file_name, 'wb') as f:
         f.write(p_key.kdf.tag.get_hexbuf())
 
-def do_derive_cbc(p_key):
-    if is_hsm():
-        from tegrasign_v3_hsm import do_derive_cbc_hsm
-        return do_derive_cbc_hsm(p_key.get_sign_buf(), p_key)
-
-    return do_kdf_cbc(p_key)
-
 '''
 Perform key operation and pad back values for tag & src if successful
 '''
-def do_key_derivation(enc_file, kdf_list, chipid, magicid = None):
+def do_key_derivation(p_key, kdf_list, blockSize):
     try:
-        info_print('Perform key derivation on ' + enc_file)
+        info_print('Perform key derivation on ' + p_key.src_file)
 
         if (kdf_list[KdfArg.FLAG] <= DerKey.NVPDS):
             from tegrasign_v3_nvkey_load import load_params
-            dk, params = load_params(enc_file, kdf_list[KdfArg.FLAG], chipid)
-            return do_derive_dk(dk, params, kdf_list, chipid)
+            dk, params = load_params(p_key)
+            return do_derive_dk(dk, params, kdf_list, p_key)
         else:
-            dk, params = load_params_oem(enc_file, chipid, magicid)
-            return do_derive_dk_oem(dk, params, kdf_list, chipid)
+            dk, params = load_params_oem(p_key)
+            return do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize)
 
     except ImportError as e:
         raise tegrasign_exception('Please check setup. Could not find ' + str(e))
 
     except Exception as e:
         info_print(traceback.format_exc())
-        raise tegrasign_exception("Unknown %s requested for key derivation encryption. Error %s" %(enc_file, str(e)))
+        raise tegrasign_exception("Unknown %s requested for key derivation encryption. Error %s" %(p_key.src_file, str(e)))
