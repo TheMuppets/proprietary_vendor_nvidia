@@ -4372,8 +4372,11 @@ def tegraflash_generate_bct():
         # Don't generate bct for external devices
         return
 
-    # Generate br bct for multiple boot chains
-    tegraflash_generate_br_bct_multi_chain(True, False, True)
+    if int(values['--chip'], 0) == 0x21:
+        tegraflash_generate_br_bct(True)
+    else:
+        # Generate br bct for multiple boot chains
+        tegraflash_generate_br_bct_multi_chain(True, False, True)
 
     if int(values['--chip'], 0) == 0x21 and int(values['--chip_major'], 0) > 1:
         tegraflash_generate_br_bct(False)
