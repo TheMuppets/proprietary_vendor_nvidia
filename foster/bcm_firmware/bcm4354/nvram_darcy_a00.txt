@@ -108,6 +108,7 @@ pdoffset40ma1=0x0000
 pdoffset80ma1=0x0000
 
 #Max power below were set to match the power with power table in june.
+#Modified mcsbw205ghpo=0xdcb66663 to 0xdcba6663 Nov-2018, NVBUG-2386945
 maxp2ga0=86
 maxp5ga0=86,86,86,86
 maxp2ga1=86
@@ -124,7 +125,7 @@ mcsbw805glpo=0xbb666665
 mcsbw205gmpo=0xd8866663
 mcsbw405gmpo=0x88666663
 mcsbw805gmpo=0xcc666665
-mcsbw205ghpo=0xdcb66663
+mcsbw205ghpo=0xdcba6663
 
 #Backoff power increased from 0xaa666663 to 0xeea66663 (1Dec 2016)
 mcsbw405ghpo=0xeea66663
@@ -161,3 +162,9 @@ rssicorrnorm5g_c1=1,2,3,2,2,2,7,7,8,7,7,8
 
 muxenab=0x11
 ltecxmux=0x534201
+btc_params122=0
+btc_params123=0
+
+olpc_thresh=19
+olpc_anchor2g=15
+olpc_anchor5g=0x38
