@@ -12,7 +12,7 @@ boardflags2=0x00802000
 boardflags3=0x4000000a
 #boardnum=57410
 macaddr=00:90:4c:16:70:01
-ccode=XX
+ccode=XV
 regrev=0
 antswitch=0
 pdgain5g=4
@@ -153,3 +153,9 @@ rssicorrnorm5g_c1=1,2,3,2,2,2,7,7,8,7,7,8
 
 muxenab=0x11
 ltecxmux=0x534201
+btc_params122=0
+btc_params123=0
+
+olpc_thresh=15
+olpc_anchor2g=15
+olpc_anchor5g=0x22
