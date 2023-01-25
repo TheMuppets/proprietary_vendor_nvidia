@@ -27,15 +27,13 @@ from tegraflash_internal import (run_command, info_print, tegraflash_abs_path,
         tegraflash_symlink, tegraflash_os_path, tegraflash_generate_index_file,
         concat_file, getPart_name_by_type, tegraflash_concat_overlay_dtb,
         concat_file_4k, tegraflash_create_backup_file, set_partition_filename,
-        get_partition_filename, tegraflash_add_odm_data_to_dtb, strip_string_list,
+        get_partition_filename, get_all_partitions, tegraflash_add_odm_data_to_dtb, strip_string_list,
         parse_indexfile_for_qspi, compareGPT, parse_dev_params_multi_chain,
         copy_br_bct_multi_chain, generate_bct_backup_image)
 from tegraflash_internal import cmd_environ, paths, start_time, ramcode, values, tegrabct_multi_chain, tegrabct_backup
 from tegraflash_internal import tegraflash_exception
 
-from tegrasign_v3 import (compute_sha, do_key_derivation,
-                          tegrasign)
-from tegrasign_v3_util import DerKey, KdfArg, set_env, hex_to_str, str_to_hex
+from tegrasign_v3 import (compute_sha, tegrasign, set_env, hex_to_str, str_to_hex)
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "pyfdt"))
 import pyfdt
@@ -119,6 +117,7 @@ class TFlashT23x_Base(object):
         self.GSHV = '4e564441'
         self.header_magic_fmt = '>I'
         self.header_size = 400
+        self.is_rcmboot = False
 
         # SHA digest offsets
         self.args_offset = ''
@@ -152,6 +151,7 @@ class TFlashT23x_Base(object):
         command = self.exec_file('tegraparser')
         command.extend(['--get_magic', partition_type])
         magic_id = run_command(command)
+        magic_id = magic_id.strip()
         info_print('partition type ' + partition_type + ', magic id = ' + magic_id)
         return magic_id
 
@@ -167,7 +167,7 @@ class TFlashT23x_Base(object):
             raise tegraflash_exception(otp_args[0] + ' is not an xml file')
 
         if values['--securedev']:
-            raise tegraflash.exception('Error: ufs_otp with --securedev not support yet')
+            raise tegraflash_exception('Error: ufs_otp with --securedev not support yet')
 
         compulsory_args = ['--bl', '--sdram_config']
         for required_arg in compulsory_args:
@@ -176,7 +176,10 @@ class TFlashT23x_Base(object):
 
         self.tegraflash_get_key_mode()
         self.tegraflash_parse_partitionlayout()
-        self.tegraflash_sign_images()
+        if values['--encrypt_key'] is None:
+            self.tegraflash_sign_images()
+        else:
+            self.tegraflash_enc_and_sign_images()
         self.tegraflash_generate_bct()
         self.tegraflash_update_images()
         self.tegraflash_send_to_bootrom()
@@ -341,7 +344,7 @@ class TFlashT23x_Base(object):
                         '--pinmux_config', '--pmc_config', '--pmic_config',
                         '--prod_config', '--scr_cold_boot_config',
                         '--scr_config', '--sdram_config', '--uphy_config',
-                        '--wb0sdram_config']
+                        '--wb0sdram_config', '--minratchet_config']
 
         for config in configs_list:
             if values[config] is not None:
@@ -373,7 +376,10 @@ class TFlashT23x_Base(object):
         # function because it generated BR-BCT before signing
         # MB1 image
         bct_flag = False if "nobct" in cmd_args else True
-        self.tegraflash_sign_images(bct_flag=bct_flag)
+        if values['--encrypt_key'] is None:
+            self.tegraflash_sign_images(bct_flag=bct_flag)
+        else:
+            self.tegraflash_enc_and_sign_images(bct_flag=bct_flag)
 
         # if nobct is specified in the command argument
         # skip bct generation
@@ -456,7 +462,6 @@ class TFlashT23x_Base(object):
         # Update dtb with odmdata and overlay dtb, then concatenate
         if values['--odmdata']:
             self.tegraflash_update_bpmp_dtb()
-            self.tegraflash_update_kernel_dtb()
             self.tegraflash_update_cpubl_dtb()
         tegraflash_concat_overlay_dtb()
 
@@ -478,7 +483,9 @@ class TFlashT23x_Base(object):
                 self.update_mb2comb_filename(mb2comb_bin)
         if dce_comb:
             dce_bin = self.get_dcebin_filename()
-            kernel_dtb = self.get_kerneldtb_filename()
+            kernel_dtb = self.get_dce_base_dtb_filename()
+            if kernel_dtb is None:
+                info_print("WARNING: dce base dtb is not provided\n")
             if dce_bin is not None and kernel_dtb is not None:
                 dce_comb = self.concatenate_dcebin_kerneldtb(dce_bin, kernel_dtb)
                 info_print("Update " + dce_comb + " to dce_fw partitions")
@@ -492,6 +499,33 @@ class TFlashT23x_Base(object):
         self.tegraparser_values['--pt'] = os.path.splitext( values['--cfg'])[0] + '.bin'
         run_command(command)
 
+    def tegraflash_oem_enc(self, filename, bct_flag = False):
+        file_base, file_ext = os.path.splitext(filename)
+        kdf_yaml = 'kdf_args_%s.yaml' %(file_base)
+
+        chip_info = '%s%s %s'  %(values['--chip'], values['--chip_major'], values['--chip_minor'])
+        if values['--enable_user_kdk'] == True:
+            lines = 'ENC : "USER_KDK"\n'
+        else:
+            lines = 'ENC : "OEM"\n'
+        lines += 'CHIPID : "%s"\n' %(chip_info)
+        if values['--chip_major'] == '9' and values['--chip_minor'] == '67' and self.is_rcmboot == True:
+            lines += 'BOOTMODE : "RCM"\n'
+        with open(kdf_yaml, 'w') as f:
+            f.write(lines)
+        self.call_tegrasign(filename, None, None, values['--encrypt_key'][0], None, None, None, None, None, None, False, 0, 0, 0, None, 0, ['kdf_file=' + kdf_yaml])
+        os.remove(kdf_yaml)
+        return file_base + '_encrypt'  + file_ext
+
+    def tegraflash_generate_ratchet_blob(self):
+        if not os.path.exists(self.tegrahost_values['--ratchet_blob']):
+            info_print('Generating ratchet blob')
+            # convert ratchet dts to dtb
+            self.tegraflash_preprocess_configs()
+            # ratchet blob is generated when generating mb1-bct
+            # since the ratchet info is saved in mb1-bct
+            self.tegraflash_generate_mb1_bct(True)
+
     def tegraflash_sign_images(self, ovewrite_xml=True, bct_flag=True):
 
         info_print('Creating list of images to be signed')
@@ -499,6 +533,7 @@ class TFlashT23x_Base(object):
         command.extend(['--chip', values['--chip'], values['--chip_major']])
         command.extend(['--partitionlayout', self.tegraparser_values['--pt']])
         if values['--minratchet_config'] is not None:
+            self.tegraflash_generate_ratchet_blob()
             command.extend(['--ratchet_blob',
                             self.tegrahost_values['--ratchet_blob']])
         command.extend(['--list', self.tegrahost_values['--list']])
@@ -623,6 +658,11 @@ class TFlashT23x_Base(object):
 
         self.tegraflash_update_boardinfo(bct_file)
 
+        if values['--encrypt_key'] is not None:
+            info_print('Perform encryption on bct')
+            enc_file = self.tegraflash_oem_enc(bct_file, True) # br_bct_BR_encrypt.bct
+            shutil.copyfile(enc_file, bct_file)
+
         info_print('Get Signed section of bct')
         command = self.exec_file('tegrabct')
         command.extend([brbct_arg, bct_file])
@@ -631,24 +671,6 @@ class TFlashT23x_Base(object):
         run_command(command)
 
         info_print('Signing BCT')
-        if values['--encrypt_key'] is not None:
-            info_print('Generating signatures')
-            key_val = values['--encrypt_key'][0]
-            list_val = self.tegrabct_values['--list']
-            pkh_val = self.tegrasign_values['--pubkeyhash']
-            self.call_tegrasign(None, None, None, key_val, None,
-                                list_val, None, pkh_val, None, None)
-            info_print('Updating BCT with signature')
-            command = self.exec_file('tegrabct')
-            command.extend([brbct_arg, bct_file])
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-            command.extend(
-                ['--updatesig', self.tegrabct_values['--signed_list']])
-            if os.path.isfile(self.tegrasign_values['--pubkeyhash']):
-                command.extend(
-                    ['--pubkeyhash', self.tegrasign_values['--pubkeyhash']])
-            run_command(command)
-
         key_val = values['--key']
         list_val = self.tegrabct_values['--list']
         sha_val = 'sha512'
@@ -748,7 +770,7 @@ class TFlashT23x_Base(object):
         self.tegraflash_generate_blob(True, tegraflash_os_path(output_dir + "/" + blob_filename), False)
         info_print(blob_filename + ' saved in ' + output_dir)
 
-    def tegraflash_generate_blob(self, sign_images, blob_filename, is_coldboot_mb2bct):
+    def tegraflash_generate_blob(self, sign_images, blob_filename, is_coldboot_mb2bct, mb2_is_fskp=False):
         bins=''
         info_print('Generating blob for T23x')
         root = ElementTree.Element('file_list')
@@ -767,14 +789,17 @@ class TFlashT23x_Base(object):
         filename = 'blob_' + filename;
 
         if sign_images:
-            filename = self.tegraflash_oem_sign_file(filename, 'CPBL')
+            if values['--encrypt_key'] is not None:
+                filename = self.tegraflash_oem_enc_and_sign_file(filename, 'CPBL')
+            else:
+                filename = self.tegraflash_oem_sign_file(filename, 'CPBL')
 
         child.set('name', filename)
         child.set('type', 'bootloader')
 
         images_to_sign = ['dce_fw', 'mts_mce', 'mb2_bootloader', 'fusebypass', 'mb2_applet',
                 'bootloader_dtb', 'spe_fw', 'bpmp_fw', 'bpmp_fw_dtb', 'psc_fw', 'tos', 'eks', 'sce_fw', 'ape_fw',
-                'tsec_fw', 'nvdec', 'xusb_fw', 'rce_fw', 'fsi_fw', 'fskp_bin', 'bpmp_ist', 'ccplex_ist', 'ist_ucode']
+                'tsec_fw', 'nvdec', 'xusb_fw', 'rce_fw', 'fsi_fw', 'bpmp_ist', 'ccplex_ist', 'ist_ucode']
 
         if values['--bins']:
             bins = values['--bins'].split(';')
@@ -790,8 +815,12 @@ class TFlashT23x_Base(object):
             child.set('type', tags[0])
 
             filename = os.path.basename(tags[1])
+            # handle bpmp_fw_dtb when --odmdata is present
+            if tags[0] == 'bpmp_fw_dtb' and self.bpmpdtbodm:
+                info_print('Using bpmp-dtb concatenated with odmdata in blob')
+                filename = os.path.basename(self.bpmpdtbodm)
             # handle bootloader with mb2bct
-            if sign_images and tags[0] == 'mb2_bootloader':
+            if sign_images and tags[0] == 'mb2_bootloader' and not mb2_is_fskp:
                 mb2_bct_file = self.tegraflash_generate_mb2_bct(is_coldboot_mb2bct)
                 # update storage info in mb2bct
                 info_print('Updating mb2-bct with storage information')
@@ -804,30 +833,12 @@ class TFlashT23x_Base(object):
                 filename = mb2comb_file
             # dce fw needs to concatenate with kernel dtb
             if sign_images and tags[0] == 'dce_fw':
-                kernel_dtb = values['--rawkerneldtb']
+                kernel_dtb = self.get_dce_base_dtb_filename()
                 if kernel_dtb is None:
                     info_print("WARNING: kernel dtb is not provided\n")
                 else:
                     dce_comb = self.concatenate_dcebin_kerneldtb(filename, kernel_dtb)
                     filename = dce_comb
-
-            if tags[0] == 'fskp_bin' and values['--fuse_info'] is not None:
-                fuse_info_xml = values['--fuse_info']
-                fuse_info_bin = os.path.splitext(fuse_info_xml)[0] + '.bin'
-                info_print('Generating fuse information\n')
-                command = self.exec_file('tegraparser')
-                command.extend(['--chip', values['--chip'], values['--chip_major']])
-                command.extend(['--fuse_info', fuse_info_xml])
-                command.extend([fuse_info_bin])
-                run_command(command)
-                # append fuse_info.bin to fskp binary. XXX: not a mechanical concatenation
-                info_print('Concatenate fuse info to fskp\n')
-                command = self.exec_file('tegraparser')
-                command.extend(['--fskp_info', filename])
-                command.extend([fuse_info_bin])
-                run_command(command)
-                # the fskp comb is named as e.g. fskp_updated.bin
-                filename = os.path.splitext(filename)[0] + '_updated.bin'
 
             if not os.path.exists(filename):
                 tegraflash_symlink(tegraflash_abs_path(tags[1]), filename)
@@ -839,7 +850,10 @@ class TFlashT23x_Base(object):
 
             if sign_images and tags[0] in images_to_sign:
                 magic_id = self.tegraflash_get_magicid(tags[0])
-                filename = self.tegraflash_oem_sign_file(filename, magic_id)
+                if values['--encrypt_key'] is not None:
+                    filename = self.tegraflash_oem_enc_and_sign_file(filename, magic_id)
+                else:
+                    filename = self.tegraflash_oem_sign_file(filename, magic_id)
 
             child.set('name', filename)
 
@@ -876,7 +890,10 @@ class TFlashT23x_Base(object):
         # moved to ::tegraflash_generate_bct()
         #self.tegraflash_preprocess_configs()
         self.tegraflash_parse_partitionlayout()
-        self.tegraflash_sign_images()
+        if values['--encrypt_key'] is not None:
+            self.tegraflash_enc_and_sign_images()
+        else:
+            self.tegraflash_sign_images()
         self.tegraflash_generate_bct()
         self.tegraflash_update_images()
         self.tegraflash_send_to_bootrom()
@@ -938,8 +955,8 @@ class TFlashT23x_Base(object):
         uidlog = run_command(command, True)
         info_print('Boot Rom communication completed')
 
-    def tegraflash_send_to_bootloader(self, sign_images = True, is_coldboot = False):
-        self.tegraflash_generate_blob(sign_images, 'blob.bin', is_coldboot)
+    def tegraflash_send_to_bootloader(self, sign_images = True, is_coldboot = False, mb2_is_fskp=False):
+        self.tegraflash_generate_blob(sign_images, 'blob.bin', is_coldboot, mb2_is_fskp)
 
         info_print('Sending membct and RCM blob')
         command = self.exec_file('tegrarcm')
@@ -973,8 +990,7 @@ class TFlashT23x_Base(object):
             raise tegraflash_exception('mb2 applet not found in --bins')
 
         if values['--encrypt_key'] is not None:
-            filename = self.tegraflash_oem_encrypt_and_sign_file(filename, True, 'MB2A')
-            filename = self.tegraflash_oem_encrypt_and_sign_file(filename, False, 'MB2A')
+            filename = self.tegraflash_oem_enc_and_sign_file(filename, 'MB2A')
         else:
             filename = self.tegraflash_oem_sign_file(filename, 'MB2A')
 
@@ -1302,16 +1318,21 @@ class TFlashT23x_Base(object):
             run_command(command)
 
         else:
+            self.is_rcmboot = True
             self.tegraflash_get_key_mode()
             args['--skipuid'] = False
             self.tegraflash_preprocess_configs()
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
+            if values['--encrypt_key'] is not None:
+                self.tegraflash_enc_and_sign_images()
+            else:
+                self.tegraflash_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             self.tegraflash_send_to_bootrom()
             # sign image, and for coldboot as it needs to disable bit 'enable_flashing'
             self.tegraflash_send_to_bootloader(True, True)
+            self.is_rcmboot = False # Reset
 
         info_print('RCM-boot started\n')
 
@@ -1349,13 +1370,10 @@ class TFlashT23x_Base(object):
         raise tegraflash_exception('Error: Can not find partition type for ' + name_type)
 
     def tegraflash_update_bpmp_dtb(self):
-        #  Supported config list based on chip major
-        if values['--chip_major'] == '9':
-            uphy_config = ["hsio-uphy-config"]
-            misc_config = ["pcie-c0-endpoint-use-int-refclk"]
-        else:
-            uphy_config = ["hsio-uphy-config", "nvhs-uphy-config", "gbe-uphy-config"]
-            misc_config = ["gbe0-enable-10g", "gbe1-enable-10g", "gbe2-enable-10g", "gbe3-enable-10g"]
+        #  Supported config list for t234
+        uphy_config = ["hsio-uphy-config", "nvhs-uphy-config", "gbe-uphy-config", "hsstp-lane-map"]
+        misc_config = ["gbe0-enable-10g", "gbe1-enable-10g", "gbe2-enable-10g", "gbe3-enable-10g"]
+        chipid = "t234"
 
         try:
             if values['--odmdata'] is None:
@@ -1413,6 +1431,7 @@ class TFlashT23x_Base(object):
 
             with open(bpmp_dtb,'wb') as outfile:
                 outfile.write(fdt.to_dtb())
+                self.bpmpdtbodm = bpmp_dtb
 
             with open(os.path.splitext(bpmp_dtb)[0] + ".dts",'w') as outfile:
                 outfile.write(fdt.to_dts())
@@ -1425,7 +1444,7 @@ class TFlashT23x_Base(object):
                 else:
                     python_path = 'python3' # set as default
                 command = [python_path, "dtbcheck.py"]
-                command.extend(["-c", "t234"])
+                command.extend(["-c", chipid])
                 command.extend(["-o", bpmp_dtb])
                 command.extend([tmp_dtb])
                 run_command(command, True)
@@ -1434,36 +1453,6 @@ class TFlashT23x_Base(object):
                 raise tegraflash_exception('Unexpected error in updating: ' + bpmp_dtb + ' ' )
         except Exception as e:
             raise tegraflash_exception('Unexpected error in updating: ' + bpmp_dtb + ' ' + str(e))
-
-    def tegraflash_update_kernel_dtb(self):
-        try:
-            kernel_dtb = get_partition_filename('kernel-dtb')
-            dual_boot_chain = False
-            if kernel_dtb == None:
-                kernel_dtb = get_partition_filename('A_kernel-dtb')
-                dual_boot_chain = True
-
-            if values['--kerneldtb']:
-                kernel_dtb = values['--kerneldtb']
-
-            if kernel_dtb == None:
-                info_print('kernel_dtb does not exist')
-                return
-
-            # Create the backup dtb
-            kernel_dtb = tegraflash_create_backup_file(kernel_dtb, '_with_odm')
-            if dual_boot_chain:
-                set_partition_filename('A_kernel-dtb', kernel_dtb)
-                set_partition_filename('B_kernel-dtb', kernel_dtb)
-            else:
-                set_partition_filename('kernel-dtb', kernel_dtb)
-
-            values['--kerneldtb'] = kernel_dtb
-
-            tegraflash_add_odm_data_to_dtb(values['--odmdata'], kernel_dtb)
-
-        except Exception as e:
-            raise tegraflash_exception("Error updating DTB: " + kernel_dtb + ' ' + str(e))
 
     def tegraflash_update_cpubl_dtb(self):
         if values['--bldtb'] is None or values['--odmdata'] is None:
@@ -1531,6 +1520,11 @@ class TFlashT23x_Base(object):
                 ['--deviceprod', values['--deviceprod_config']])
         if values['--fb'] is not None:
             command.extend(['--fb', values['--fb']])
+        if values['--minratchet_config'] is not None:
+            command.extend(
+                ['--minratchet', values['--minratchet_config']])
+            command.extend(
+                ['--ratchet_blob', self.tegrahost_values['--ratchet_blob']])
 
         run_command(command)
 
@@ -1557,148 +1551,23 @@ class TFlashT23x_Base(object):
             command.extend(['--updatefwinfo', self.tegraparser_values['--pt']])
             run_command(command)
 
-        if values['--minratchet_config'] is not None:
-            info_print('Updating mb1-bct with ratchet information')
-            command = self.exec_file('tegrabct')
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-            command.extend(['--mb1bct', mb1bct_file])
-            command.extend(
-                ['--minratchet', values['--minratchet_config']])
-            run_command(command)
-
         if bool(is_cold_boot_mb1_bct) == True:
             if values['--encrypt_key'] is not None:
-                self.tegrabct_values['--mb1_cold_boot_bct'] = self.tegraflash_oem_encrypt_and_sign_file(
-                    self.tegrabct_values['--mb1_cold_boot_bct'], True, 'MBCT')
-                self.tegrabct_values['--mb1_cold_boot_bct'] = self.tegraflash_oem_encrypt_and_sign_file(
-                    self.tegrabct_values['--mb1_cold_boot_bct'], False, 'MBCT')
+                old_name = self.tegrabct_values['--mb1_cold_boot_bct']
+                self.tegrabct_values['--mb1_cold_boot_bct'] = self.tegraflash_oem_enc_and_sign_file(
+                    self.tegrabct_values['--mb1_cold_boot_bct'], 'MBCT')
+                # Need to update pt name since file name is changed
+                self.tegraflash_update_pt_name(old_name, self.tegrabct_values['--mb1_cold_boot_bct'])
             else:
                 self.tegrabct_values['--mb1_cold_boot_bct'] = self.tegraflash_oem_sign_file(
                     self.tegrabct_values['--mb1_cold_boot_bct'], 'MBCT')
         else:
             if values['--encrypt_key'] is not None:
-                self.tegrabct_values['--mb1_bct'] = self.tegraflash_oem_encrypt_and_sign_file(
-                    self.tegrabct_values['--mb1_bct'], True, 'MBCT')
-                self.tegrabct_values['--mb1_bct'] = self.tegraflash_oem_encrypt_and_sign_file(
-                    self.tegrabct_values['--mb1_bct'], False, 'MBCT')
+                self.tegrabct_values['--mb1_bct'] = self.tegraflash_oem_enc_and_sign_file(
+                    self.tegrabct_values['--mb1_bct'], 'MBCT')
             else:
                 self.tegrabct_values['--mb1_bct'] = self.tegraflash_oem_sign_file(
                     self.tegrabct_values['--mb1_bct'], 'MBCT')
-
-    def tegraflash_oem_enc_fskp(self, in_file):
-        info_print('Encrypting ' + in_file)
-        FSKP_EK = '60b0a25a2b7bcc4d48e7ab3cda9c157fcbb260a4e5c8b5be24f665a1ed93cbd1'
-        fskp_ek = 'fskp_ek.key'
-        with open(fskp_ek, 'wb') as f:
-            f.write(str_to_hex(FSKP_EK))
-
-        len_offset = 5124
-        len_buf = bytearray(4)
-        payload_len = 0
-
-        tag2_offset = 5200
-        iv2_offset = 5188
-        iv2_size = 12
-
-        aad2_offset = 5120
-        aad2_size = tag2_offset - aad2_offset #80
-
-        tag_offset = 5200
-        tag2_size = 16
-
-        with open(in_file, 'rb') as f:
-            src = bytearray(f.read())
-            len_buf[:] = src[len_offset:len_offset+4]
-            payload_len = struct.unpack('<I', len_buf)[0]
-            iv2 = src[iv2_offset:iv2_offset+iv2_size]
-            aad2 = src[aad2_offset:aad2_offset+aad2_size]
-            self.call_tegrasign(
-                in_file, None, None, fskp_ek, str(payload_len), None, '8192', None, None, 'aesgcm', True, hex_to_str(iv2), hex_to_str(aad2), hex_to_str(bytearray(tag2_size)))
-
-        enc_file = os.path.splitext(in_file)[0] + '_encrypt' + os.path.splitext(in_file)[1]
-        with open(enc_file, 'rb+') as f:
-            src = bytearray(f.read())
-            tag_file_name = os.path.splitext(in_file)[0] + '.tag'
-            with open(tag_file_name, 'rb') as tag_f:
-                src[tag2_offset:tag2_offset+tag2_size] = bytearray(tag_f.read())
-            f.seek(0)
-            f.write(src)
-
-        return enc_file
-
-    def tegraflash_oem_sign_fskp(self, in_file):
-        enc_file = self.tegraflash_oem_enc_fskp(in_file)
-
-        info_print('Signing ' + enc_file)
-        FSKP_AK = '82293353f48428a187b096c347a52b690673d1878ee00e67e784d0758bb3ccff'
-        fskp_ak = 'fskp_ak.key'
-        with open(fskp_ak, 'wb') as f:
-            f.write(str_to_hex(FSKP_AK))
-
-        len_offset = 5124
-        len_buf = bytearray(4)
-        len_buf = bytearray(4)
-        sha_offset = 5216
-        sha_size = 64
-        payload_len = 0
-
-        # Do the binary digest first
-        with open(enc_file, 'rb+') as f:
-            src = bytearray(f.read())
-            len_buf[:] = src[len_offset:len_offset+4]
-            payload_len = struct.unpack('<I', len_buf)[0]
-
-            self.call_tegrasign(
-                enc_file, None, None, None, str(payload_len), None, '8192', None, 'sha512', None)
-            sha_file_name = os.path.splitext(enc_file)[0] + '.sha'
-            # Save the digest value
-            with open(sha_file_name, 'rb') as sha_f:
-                src[sha_offset:sha_offset+sha_size] = bytearray(sha_f.read())
-            f.seek(0)
-            f.write(src)
-
-        # Do the stage2 hmac next after binary update
-        self.call_tegrasign(
-            enc_file, None, None, fskp_ak, str(8192 - 4032), None, '4032', None, None, None, True, 0, 0, 0, 'hmacsha256')
-
-        signed_file = os.path.splitext(enc_file)[0] + '.signed'
-        shutil.copyfile(enc_file, signed_file)
-
-        # Do the stage2 digest to stage2 sig digest
-        self.call_tegrasign(
-            enc_file, None, None, None, str(8192 - 4032), None, '4032', None, 'sha512', None)
-
-        # Save hmac value & digest value
-        offset = 144
-        off_size = 32
-        sha_offset = 80
-        sha_size = 64
-        with open(signed_file, 'rb+') as f:
-            src = bytearray(f.read())
-            hash_file_name = os.path.splitext(enc_file)[0] + '.hash'
-            with open(hash_file_name, 'rb') as hash_f:
-                src[offset:offset+off_size] = bytearray(hash_f.read())
-            sha_file_name = os.path.splitext(enc_file)[0] + '.sha'
-            with open(sha_file_name, 'rb') as sha_f:
-                src[sha_offset:sha_offset+sha_size] = bytearray(sha_f.read())
-
-            f.seek(0)
-            f.write(src)
-
-        # Do bch digest and save it
-        sha_offset = 4
-        self.call_tegrasign(
-            signed_file, None, None, None, str(8192 - 68), None, '68', None, 'sha512', None)
-        with open(signed_file, 'rb+') as f:
-            src = bytearray(f.read())
-            sha_file_name = os.path.splitext(enc_file)[0] + '.sha'
-            # Save the bch diget
-            with open(sha_file_name, 'rb') as sha_f:
-                src[sha_offset:sha_offset+sha_size] = bytearray(sha_f.read())
-            f.seek(0)
-            f.write(src)
-
-        return signed_file
 
     def tegraflash_oem_sign_file(self, in_file, magic_id):
         filename = os.path.basename(in_file)
@@ -1727,6 +1596,7 @@ class TFlashT23x_Base(object):
         # fixme : right magicid needs to be passed in recovery path
         command.extend(['--magicid', magic_id])
         if values['--minratchet_config'] is not None:
+            self.tegraflash_generate_ratchet_blob()
             command.extend(['--ratchet_blob',
                             self.tegrahost_values['--ratchet_blob']])
         command.extend(['--appendsigheader', filename, mode])
@@ -1736,10 +1606,6 @@ class TFlashT23x_Base(object):
         run_command(command)
         filename = os.path.splitext(
             filename)[0] + '_sigheader' + os.path.splitext(filename)[1]
-
-        # Special handling for FSKP
-        if (magic_id == 'FSKP'):
-            return self.tegraflash_oem_sign_fskp(filename)
 
         root = ElementTree.Element('file_list')
         comment = ElementTree.Comment('Auto generated by tegraflash.py')
@@ -1823,40 +1689,35 @@ class TFlashT23x_Base(object):
         signed_file = newname
         return signed_file
 
-    def _is_ratchet_set_needed(magic_id):
-        images_need_ratchet = ['MBCT', 'SPEF', 'DECC', 'ISTU', 'BIST', 'MB2B', 'MEMB', 'CPBL', 'TOSB',
-                               'EKSB', 'BPMF', 'BPMD', 'SCEF', 'RCEF', 'APEF', 'CDTB', 'KRNL', 'KDTB']
-        if magic_id in images_need_ratchet:
-            return True
-        else:
-            return False
-
-    def tegraflash_oem_encrypt_and_sign_file(self, in_file, header, magic_id):
-        filename = os.path.basename(in_file)
+    def tegraflash_oem_enc_and_sign_file(self, in_file, magic_id):
+        filename = in_file
         info_print(filename)
-        aligned_file = os.path.splitext(
-            filename)[0] + '_aligned' + os.path.splitext(filename)[1]
-        if os.path.exists(in_file):
-            shutil.copyfile(in_file, aligned_file)
-        mode = self.tegrasign_values['--mode']
-        command = self.exec_file('tegrahost')
-        command.extend(['--chip', values['--chip'], values['--chip_major']])
-        command.extend(['--align', aligned_file])
-        run_command(command)
 
-        filename = aligned_file
-        mode = 'oem-rsa-sbk'
-        # Do not append sigheader yet if 'header' is True (the 1st phase to do encryption).
-        # When 'header' is False (the 2nd phase of doing signing, when data has been encrypted),
-        # will then append sigheader, because tegrahost with --appendsigheader will then do
-        # hash on the encrypted data.
-        # (This is because that tegrahost --updatesigheader doesn't do hash on the data.)
-        if bool(header) == False:
+        info_print('Encrypting and signing ' + in_file)
+        is_aligned = False
+        algo_list = {'pkc':'oem-rsa', 'ec':'oem-ecc', 'eddsa':'oem-eddsa', 'xmss':'oem-xmss'}
+
+        if not self. _is_header_present(filename):
+            aligned_file = os.path.splitext(
+                filename)[0] + '_aligned' + os.path.splitext(filename)[1]
+            if os.path.exists(in_file):
+                shutil.copyfile(in_file, aligned_file)
             command = self.exec_file('tegrahost')
+            command.extend(['--chip', values['--chip'], values['--chip_major']])
+            command.extend(['--align', aligned_file])
+            run_command(command)
+            is_aligned = True
+            filename = aligned_file
+            mode = self.tegrasign_values['--mode']
+            if mode in algo_list:
+                mode = algo_list[mode]
+
+            command = self.exec_file('tegrahost') # stage1.sha, stage2.sha, bch.sha
             command.extend(['--appendsigheader', filename, mode])
             command.extend(['--chip', values['--chip'], values['--chip_major']])
             command.extend(['--magicid', magic_id])
-            if values['--minratchet_config'] is not None and self._is_ratchet_set_needed(magic_id):
+            if values['--minratchet_config'] is not None:
+                self.tegraflash_generate_ratchet_blob()
                 command.extend(['--ratchet_blob', self.tegrahost_values['--ratchet_blob']])
             if values['--ecid'] is not None:
                 command.extend(['--ecid', values['--ecid']])
@@ -1864,74 +1725,151 @@ class TFlashT23x_Base(object):
             filename = os.path.splitext(
                 filename)[0] + '_sigheader' + os.path.splitext(filename)[1]
 
+        enc_file = self.tegraflash_oem_enc(filename)
+
         root = ElementTree.Element('file_list')
         comment = ElementTree.Comment('Auto generated by tegraflash.py')
         root.append(comment)
         child = ElementTree.SubElement(root, 'file')
-        child.set('name', filename)
-        if bool(header) == True:
-           if not self._is_header_present(filename):
-              child.set('offset', '0')
-           else:
-              child.set('offset', '8192')
-        else:
-            if self.bch_offset is not None:
-                child.set('offset', self.bch_offset)
-            if self.bch_length is not None:
-                child.set('length', self.bch_length)
+        child.set('name', enc_file)
+        # fixed offsets for BCH
+        if self.bch_offset is not None:
+            child.set('offset', self.bch_offset)
+        if self.bch_length is not None:
+            child.set('length', self.bch_length)
         sbk = ElementTree.SubElement(child, 'sbk')
-        sbk.set('encrypt', '1')
+        sbk.set('encrypt', '0')
         sbk.set('sign', '1')
-        sbk.set('encrypt_file', filename + '.encrypt')
-        sbk.set('hash', filename + '.hash')
-        pkc = ElementTree.SubElement(child, 'pkc')
-        pkc.set('signature', filename + '.sig')
-        pkc.set('signed_file', filename + '.signed')
+        sbk.set('encrypt_file', enc_file)
+        sbk.set('hash', enc_file + '.hash')
+
+        for algo in algo_list.keys():
+            node = ElementTree.SubElement(child, algo)
+            node.set('signature', enc_file + '.sig')
+            node.set('signed_file', enc_file + '.signed')
+            if algo in ['pkc', 'ec']:
+                node.set('digest_type', 'sha512')
+
         sign_tree = ElementTree.ElementTree(root)
-        sign_tree.write(filename + '_list.xml')
+        sign_tree.write(enc_file + '_list.xml')
 
-        pkh_val = None
-        if bool(header) == True:
-            args_key = values['--encrypt_key'][0]
-        else:
-            args_key = values['--key']
-            pkh_val = self.tegrasign_values['--pubkeyhash']
-        self.call_tegrasign(None, None, None, args_key, None,
-                            filename + '_list.xml', None, pkh_val, 'sha512', None)
+        key_val = values['--key']
+        list_val = enc_file + '_list.xml'
+        pkh_val = self.tegrasign_values['--pubkeyhash']
+        self.call_tegrasign(None, None, None, key_val, None,
+                            list_val, None, pkh_val, 'sha512', None)
+        sign_xml_file = enc_file + '_list_signed.xml'
 
-        sign_xml_file = filename + '_list_signed.xml'
         with open(sign_xml_file, 'rt') as file:
             xml_tree = ElementTree.parse(file)
-        mode = xml_tree.getroot().get('mode')
-        if mode == "pkc":
-            sig_type = "oem-rsa"
+            mode = xml_tree.getroot().get('mode')
+        if mode in algo_list:
+            sig_type = algo_list[mode]
             list_text = "signed_file"
             sig_file = "signature"
         else:
             list_text = "encrypt_file"
             sig_type = "zerosbk"
             sig_file = "hash"
-        signed_file = filename
+        signed_file = enc_file
         for file_nodes in xml_tree.iter('file'):
             signed_file = file_nodes.find(mode).get(list_text)
             sig_file = file_nodes.find(mode).get(sig_file)
+
         command = self.exec_file('tegrahost')
-        command.extend(['--chip', values['--chip']])
+        command.extend(
+            ['--chip', values['--chip'], values['--chip_major']])
+        if os.path.isfile(self.tegrasign_values['--pubkeyhash']):
+            command.extend(
+                ['--pubkeyhash', self.tegrasign_values['--pubkeyhash']])
         command.extend(['--updatesigheader', signed_file, sig_file, sig_type])
-        if sig_type != "zerosbk":
-            if os.path.isfile(self.tegrasign_values['--pubkeyhash']):
-                command.extend(['--pubkeyhash', self.tegrasign_values['--pubkeyhash']])
-        if sig_type == "oem-rsa":
-            if os.path.isfile(self.tegrasign_values['--getmontgomeryvalues']):
-                command.extend(['--setmontgomeryvalues', self.tegrasign_values['--getmontgomeryvalues']])
         run_command(command)
 
-        signed_file = os.path.splitext(
-            signed_file)[0] + os.path.splitext(signed_file)[1]
-        newname = signed_file.replace('_aligned', '')
-        shutil.copyfile(signed_file, newname)
-        signed_file = newname
+        if is_aligned:
+            newname = signed_file.replace('_aligned', '')
+            shutil.copyfile(signed_file, newname)
+            signed_file = newname
         return signed_file
+
+    def tegraflash_update_pt_name(self, pt_name, new_name):
+        skip_types = ['boot_config_table', 'mb2_applet', ]
+        pt_base, pt_ext = os.path.splitext(pt_name)
+
+        with open(values['--cfg'], 'rt') as file:
+            xml_tree = ElementTree.parse(file)
+            root = xml_tree.getroot()
+            for node in root.findall('.//partition'):
+
+                file_node = node.find('filename')
+                if file_node is not None and file_node.text is not None:
+                    filename = file_node.text.strip()
+                    file_base, file_ext = os.path.splitext(filename)
+
+                    if (not file_base.startswith(pt_base) and not pt_base.startswith(file_base)):
+                        continue
+                    part_type = node.attrib.get('type').strip()
+                    if part_type in skip_types:
+                        continue
+                    part_name = node.attrib.get('name').strip()
+
+                    command = self.exec_file('tegraparser')
+                    command.extend(['--pt', self.tegraparser_values['--pt']])
+                    command.extend(['--update_part_filename', part_name, part_type, new_name])
+                    run_command(command)
+
+    def tegraflash_enc_and_sign_images(self, ovewrite_xml=True, bct_flag=False):
+
+        info_print('Creating list of images to be encrypted and signed')
+        tmp_files = {}
+
+        command = self.exec_file('tegrahost')
+        command.extend(['--chip', values['--chip'], values['--chip_major']])
+        command.extend(['--partitionlayout', self.tegraparser_values['--pt']])
+        if values['--minratchet_config'] is not None:
+            self.tegraflash_generate_ratchet_blob()
+            command.extend(['--ratchet_blob',
+                            self.tegrahost_values['--ratchet_blob']])
+
+        command.extend(['--list', self.tegrahost_values['--list']])
+
+        mode = self.tegrasign_values['--mode']
+        algo_list = {'pkc':'oem-rsa', 'ec':'oem-ecc', 'eddsa':'oem-eddsa', 'xmss':'oem-xmss'}
+
+        if mode in algo_list:
+            mode = algo_list[mode]
+
+        command.extend([mode])
+        run_command(command)
+
+        if bct_flag:
+            self.tegraflash_generate_br_bct_multi_chain(True, True, False)
+
+        with open(self.tegrahost_values['--list'], 'rt') as file:
+            xml_tree = ElementTree.parse(file)
+            mode = xml_tree.getroot().get('mode')
+
+            for file_nodes in xml_tree.getiterator('file'):
+                filename = file_nodes.get('name')
+                if 'dce' in filename:
+                    continue
+                enc_file = self.tegraflash_oem_enc(filename, bct_flag)
+                self.tegraflash_update_pt_name(filename, enc_file)
+                tmp_files.update({filename: enc_file})
+
+        # Need to re-generate images_list.xml with the new file names
+        with open(self.tegrahost_values['--list'], "r+") as f:
+            content = f.read()
+            for tmp in tmp_files:
+                content = content.replace(tmp, tmp_files[tmp])
+            f.seek(0)
+            f.write(content)
+
+        key_val = values['--key']
+        list_val = self.tegrahost_values['--list']
+        pkh_val = self.tegrasign_values['--pubkeyhash']
+        self.call_tegrasign(None, None, None, key_val, None,
+                            list_val, None, pkh_val, 'sha512', None)
+        return
 
     def tegraflash_generate_mem_bct(self, is_cold_boot_mb1_bct):
         if values['--sdram_config'] is None:
@@ -1980,8 +1918,17 @@ class TFlashT23x_Base(object):
                             mem_bcts[1], mem_bcts[2], mem_bcts[3]])
             run_command(command)
             os.rename(filename + '_1_sigheader.bct', 'mem_coldboot.bct')
-            self.tegrabct_values['--membct_cold_boot'] = self.tegraflash_oem_sign_file(
-                'mem_coldboot.bct', 'MEMB')
+            if values['--encrypt_key'] is not None:
+                align_sig_file = 'mem_coldboot_aligned_sigheader.bct'
+                shutil.copyfile('mem_coldboot.bct', align_sig_file)
+                old_name = align_sig_file
+                self.tegrabct_values['--membct_cold_boot'] = self.tegraflash_oem_enc_and_sign_file(
+                    align_sig_file, 'MEMB')
+                # Need to update pt name since file name is changed
+                self.tegraflash_update_pt_name(old_name, self.tegrabct_values['--membct_cold_boot'])
+            else:
+                self.tegrabct_values['--membct_cold_boot'] = self.tegraflash_oem_sign_file(
+                    'mem_coldboot.bct', 'MEMB')
         else:
             chip_info = tegraflash_abs_path(
                 self.tegrarcm_values['--chip_info'])
@@ -2001,7 +1948,7 @@ class TFlashT23x_Base(object):
                     if values['--ramcode'] is None:
                         ramcode = 0
                     else:
-                        ramcode = int(values['--ramcode'])
+                        ramcode = int(values['--ramcode']) >> 2
 
             info_print("Using ramcode " + str(ramcode))
 
@@ -2014,10 +1961,8 @@ class TFlashT23x_Base(object):
 
             if values['--encrypt_key'] is not None:
                 shutil.copyfile(mem_bcts[ramcode], 'mem_rcm.bct')
-                self.tegrabct_values['--membct_rcm'] = self.tegraflash_oem_encrypt_and_sign_file(
-                    'mem_rcm.bct', True, 'MEMB')
-                self.tegrabct_values['--membct_rcm'] = self.tegraflash_oem_encrypt_and_sign_file(
-                    self.tegrabct_values['--membct_rcm'], False, 'MEMB')
+                self.tegrabct_values['--membct_rcm'] = self.tegraflash_oem_enc_and_sign_file(
+                    'mem_rcm.bct', 'MEM' +  str(ramcode))
             else:
                 shutil.copyfile(mem_bcts[ramcode], 'mem_rcm.bct')
                 self.tegrabct_values['--membct_rcm'] = self.tegraflash_oem_sign_file(
@@ -2072,58 +2017,26 @@ class TFlashT23x_Base(object):
     def tegraflash_burnfuses(self, args, fuse_args):
         values.update(args)
 
-        info_print('Burning fuses')
+        info_print('Burning fuses. Please check the uart to get the result of fuse burning.')
 
         if values['--securedev']:
             print('Error: read partition with --securedev not support yet')
             return
+
         if not self.check_is_mb2applet():
             self.tegraflash_get_key_mode()
             args['--skipuid'] = False
             self.tegraflash_preprocess_configs()
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
+            if values['--encrypt_key'] is not None:
+                self.tegraflash_enc_and_sign_images()
+            else:
+                self.tegraflash_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             self.tegraflash_send_to_bootrom()
-            self.tegraflash_send_to_bootloader(True, False)
-            self.tegraflash_get_storage_info()
-            self.tegraflash_poll_applet_bl()
-
-        if fuse_args[0] == "dummy":
-            if len(fuse_args) == 2:
-                filename = os.path.splitext(fuse_args[1])
-                if filename[1] != '.xml':
-                    raise tegraflash_exception("Not an xml file")
-                info_print('Parsing fuse info as per xml file')
-                command = self.exec_file('tegraparser')
-                command.extend(['--fuse_info', fuse_args[1], self.tegrarcm_values['--fuse_info']])
-                command.extend(['--chip', values['--chip'], values['--chip_major']])
-                run_command(command)
-            command = self.exec_file('tegradevflash')
-            command.extend(['--oem','burnfuses'])
-            command.extend([fuse_args[0]])
-            run_command(command)
-
-
-        else:
-            filename = os.path.splitext(fuse_args[0])
-            if filename[1] != '.xml':
-                raise tegraflash_exception("Not an xml file")
-            info_print('Parsing fuse info as per xml file')
-            command = self.exec_file('tegraparser')
-            command.extend(['--fuse_info', fuse_args[0], self.tegrarcm_values['--fuse_info']])
-            command.extend(['--chip', values['--chip'], values['--chip_major']])
-            run_command(command)
-
-            command = self.exec_file('tegradevflash')
-            command.extend(['--oem', 'burnfuses'])
-            command.extend([self.tegrarcm_values['--fuse_info']])
-            run_command(command)
-
-        command = self.exec_file('tegradevflash')
-        command.extend(['--reboot', 'recovery'])
-        run_command(command)
+            self.tegraflash_send_to_bootloader(True, False, True)
+        info_print('Finish')
 
     def tegraflash_readfuses(self, args, read_args):
         values.update(args)
@@ -2138,7 +2051,10 @@ class TFlashT23x_Base(object):
             args['--skipuid'] = False
             self.tegraflash_preprocess_configs()
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
+            if values['--encrypt_key'] is not None:
+                self.tegraflash_enc_and_sign_images()
+            else:
+                self.tegraflash_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             self.tegraflash_send_to_bootrom()
@@ -2212,7 +2128,10 @@ class TFlashT23x_Base(object):
         args['--skipuid'] = False
         self.tegraflash_parse_partitionlayout()
         self.tegraflash_preprocess_configs()
-        self.tegraflash_sign_images()
+        if values['--encrypt_key'] is not None:
+            self.tegraflash_enc_and_sign_images()
+        else:
+            self.tegraflash_sign_images()
         self.tegraflash_generate_bct()
         self.tegraflash_update_images()
         self.tegraflash_send_to_bootrom()
@@ -2247,7 +2166,10 @@ class TFlashT23x_Base(object):
         args['--skipuid'] = False
         self.tegraflash_parse_partitionlayout()
         self.tegraflash_preprocess_configs()
-        self.tegraflash_sign_images()
+        if values['--encrypt_key'] is not None:
+            self.tegraflash_enc_and_sign_images()
+        else:
+            self.tegraflash_sign_images()
         self.tegraflash_generate_bct()
         self.tegraflash_update_images()
         self.tegraflash_send_to_bootrom()
@@ -2276,7 +2198,10 @@ class TFlashT23x_Base(object):
             run_command(command)
             filename = self.concatenate_mb2bct_mb2(mb2_bin, mb2_bct_file)
 
-        signed_file = self.tegraflash_oem_sign_file(filename, magic_id)
+        if values['--encrypt_key'] is not None:
+            signed_file = self.tegraflash_oem_enc_and_sign_file(filename, magic_id)
+        else:
+            signed_file = self.tegraflash_oem_sign_file(filename, magic_id)
         self.tegraflash_erase_partition(partition_name)
         self.tegraflash_write_partition('tegradevflash', partition_name, signed_file)
 
@@ -2299,23 +2224,14 @@ class TFlashT23x_Base(object):
                 concat_file(cpubl_with_dtb, bl_dtb_file)  # order: outfile, infile
                 filename = cpubl_with_dtb
             if values['--overlay_dtb']:
-                dtb_files = values['--overlay_dtb'].split(',')
+                dtb_files = list(filter(None, values['--overlay_dtb'].split(',')))
                 concat_file_4k(filename, dtb_files)
 
         elif partition_name in dce_list:
             dce_bin = filename
-            kernel_dtb = self.get_kerneldtb_filename()
-            if not os.path.exists(dce_bin):
-                raise tegraflash_exception('Error: Could not find dce_bin: ' + dce_bin)
-            if not os.path.exists(kernel_dtb):
-                raise tegraflash_exception('Error: Could not find kernel_dtb: ' + kernel_dtb)
-            dce_with_dtb = os.path.splitext(dce_bin)[0] + '_with_' + os.path.splitext(kernel_dtb)[0] + '.bin'
-            info_print('dce_bin = ' + dce_bin)
-            info_print('kernel_dtb = ' +  kernel_dtb)
-            info_print('dce_with_dtb = ' +  dce_with_dtb)
-            shutil.copyfile(dce_bin, dce_with_dtb)
-            concat_file(dce_with_dtb, kernel_dtb)  # order: outfile, infile
-            return dce_with_dtb
+            kernel_dtb = self.get_dce_base_dtb_filename()
+            dce_comb = self.concatenate_dcebin_kerneldtb(dce_bin, kernel_dtb)
+            return dce_comb
 
         return filename
 
@@ -2335,17 +2251,19 @@ class TFlashT23x_Base(object):
         if values['--securedev']:
             info_print('Error: write partition with --securedev not support yet')
             return
-        if not self.check_ismb2():
-            self.tegraflash_get_key_mode()
-            args['--skipuid'] = False
-            self.tegraflash_parse_partitionlayout()
-            self.tegraflash_preprocess_configs()
+        self.tegraflash_get_key_mode()
+        args['--skipuid'] = False
+        self.tegraflash_parse_partitionlayout()
+        self.tegraflash_preprocess_configs()
+        if values['--encrypt_key'] is not None:
+            self.tegraflash_enc_and_sign_images()
+        else:
             self.tegraflash_sign_images()
-            self.tegraflash_generate_bct()
-            self.tegraflash_update_images()
-            self.tegraflash_send_to_bootrom()
-            self.tegraflash_send_to_bootloader(True, False)
-            self.tegraflash_poll_applet_bl()
+        self.tegraflash_generate_bct()
+        self.tegraflash_update_images()
+        self.tegraflash_send_to_bootrom()
+        self.tegraflash_send_to_bootloader(True, False)
+        self.tegraflash_poll_applet_bl()
 
         filename = self.tegraflash_concat_partition(partition_name, filename)
         # Handle special partitions
@@ -2406,7 +2324,10 @@ class TFlashT23x_Base(object):
             self.tegraflash_get_key_mode()
             args['--skipuid'] = False
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
+            if values['--encrypt_key'] is not None:
+                self.tegraflash_enc_and_sign_images()
+            else:
+                self.tegraflash_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             self.tegraflash_send_to_bootrom()
@@ -2427,7 +2348,10 @@ class TFlashT23x_Base(object):
             self.tegraflash_get_key_mode()
             args['--skipuid'] = False
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
+            if values['--encrypt_key'] is not None:
+                self.tegraflash_enc_and_sign_images()
+            else:
+                self.tegraflash_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             self.tegraflash_send_to_bootrom()
@@ -2449,7 +2373,10 @@ class TFlashT23x_Base(object):
             args['--skipuid'] = False
             self.tegraflash_preprocess_configs()
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images(bct_flag=False)
+            if values['--encrypt_key'] is not None:
+                self.tegraflash_enc_and_sign_images()
+            else:
+                self.tegraflash_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             self.tegraflash_send_to_bootrom()
@@ -2506,16 +2433,12 @@ class TFlashT23x_Base(object):
             command[0] = self.exec_file('tegradevflash')[0]
             run_command(command)
 
-    def tegraflash_encrypt_sign_br_bct(self):
+    def tegraflash_sign_br_bct(self):
         self.tegraflash_get_key_mode()
-        # The PKC and SBK is not supported yet on t234
-        if self.tegrasign_values['--mode'] == "zerosbk":
-            self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
-            self.tegraflash_generate_br_bct_multi_chain(True, False, True)
-            self.tegraflash_update_images()
-        else:
-            raise tegraflash_exception("PKC and SBK are not supported yet")
+        self.tegraflash_parse_partitionlayout()
+        self.tegraflash_sign_images()
+        self.tegraflash_generate_br_bct_multi_chain(True, False, True)
+        self.tegraflash_update_images()
         return
 
     def tegraflash_sign_binary(self, exports, args=None):
@@ -2524,14 +2447,17 @@ class TFlashT23x_Base(object):
         partition_type = "data"
 
         # Get partition type if it exists
-        if len(args)==2:
+        if len(args) >= 2:
             partition_type = args[1]
 
         # Handle signing BCT in special way as BCT needs to be generated dyanmically
         if partition_type == "BCT":
-            self.tegraflash_encrypt_sign_br_bct()
+            self.tegraflash_sign_br_bct()
             copy_br_bct_multi_chain(paths['WD'])
         else:
+            # Handle signing CPUBL in special way as cpubl needs to concatenate dtb at first
+            if partition_type == "bootloader_stage2":
+                args[0] = self.tegraflash_concat_partition(args[2], args[0])
             magic_id = self.tegraflash_get_magicid(partition_type)
             binary = tegraflash_abs_path(args[0])
             binary_base = os.path.basename(binary)
@@ -2539,7 +2465,8 @@ class TFlashT23x_Base(object):
             binary = self.tegraflash_oem_sign_file(binary_base, magic_id)
 
             info_print('Copying ' + binary + ' to ' +  paths['WD'])
-            shutil.copyfile(binary,  paths['WD'] + "/" + binary)
+            if not shutil._samefile(binary, paths['WD'] + "/" + binary):
+                shutil.copyfile(binary,  paths['WD'] + "/" + binary)
             info_print("Signed file: " + paths['WD'] + "/" + binary)
         return
 
@@ -2550,20 +2477,21 @@ class TFlashT23x_Base(object):
 
         info_print('Generating signature')
         file_path = tegraflash_abs_path(args[0])
-        if len(args) == 2:
+        if len(args) >= 2:
             partition_type = args[1]
-        magicid = self.tegraflash_get_magicid(partition_type)
-        if (magicid == 'FSKP'):
-            return self.tegraflash_oem_sign_file(file_path, magicid)
 
         if partition_type == "BCT":
-            self.tegraflash_encrypt_sign_br_bct()
-            copy_br_bct_multi_chain(paths['WD'])
+            # TODO: will fix when flash.sh with -k option works with SBKPKC
+            info_print("Encryption of br_bct is not supported")
             return
 
         self.tegraflash_get_key_mode()
 
         if not self._is_header_present(file_path):
+            # Handle signing CPUBL in special way as cpubl needs to concatenate dtb at first
+            if partition_type == "bootloader_stage2":
+                file_path = self.tegraflash_concat_partition(args[2], file_path)
+            magicid = self.tegraflash_get_magicid(partition_type)
             temp_file = os.path.basename(file_path)
             i = 1
             while os.path.exists(str(i) + "_" + temp_file):
@@ -2572,8 +2500,7 @@ class TFlashT23x_Base(object):
             tegraflash_symlink(file_path, temp_file)
             if values['--encrypt_key'] is not None:
                 info_print('Encrypting file')
-                signed_file = self.tegraflash_oem_encrypt_and_sign_file(temp_file, True, magicid)
-                filename = self.tegraflash_oem_encrypt_and_sign_file(signed_file, False, magicid)
+                filename = self.tegraflash_oem_enc_and_sign_file(temp_file, magicid)
             else:
                 filename = self.tegraflash_oem_sign_file(temp_file, magicid)
             temp = filename.split("_", 1)
@@ -2608,6 +2535,7 @@ class TFlashT23x_Base(object):
             signed_file = file_nodes.find(mode).get(list_text)
             shutil.copyfile(signed_file, output_dir + "/" + os.path.basename(signed_file))
             if int(values['--chip'], 0) != 0x21:
+                file_name = file_name.replace('_encrypt', '')
                 file_name = file_name.replace('_sigheader', '')
                 file_name = file_name.replace('_wbheader', '')
                 file_name = file_name.replace('_aligned', '')
@@ -2622,7 +2550,10 @@ class TFlashT23x_Base(object):
 
         self.tegraflash_get_key_mode()
 
-        output_dir = tegraflash_abs_path('signed')
+        if values['--encrypt_key'] is None:
+            output_dir = tegraflash_abs_path('signed')
+        else:
+            output_dir = tegraflash_abs_path('enc_signed')
         # Create signed directory. If exists, clear all files
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir, ignore_errors=True)
@@ -2636,14 +2567,17 @@ class TFlashT23x_Base(object):
 
         if values['--cfg'] is not None :
             self.tegraflash_parse_partitionlayout()
-            self.tegraflash_sign_images()
+            if values['--encrypt_key'] is None:
+                self.tegraflash_sign_images()
+            else:
+                self.tegraflash_enc_and_sign_images()
             self.tegraflash_generate_bct()
             self.tegraflash_update_images()
             # generate gpt and mbr
             command = self.exec_file('tegraparser')
             command.extend(['--generategpt', '--pt', self.tegraparser_values['--pt']])
             run_command(command)
-            import re
+
             patt = re.compile(".*(mbr|gpt).*\.bin")
             contents = os.listdir('.')
             for f in contents:
@@ -2673,16 +2607,19 @@ class TFlashT23x_Base(object):
                         tags[1] = mb2comb_file
 
                     magic_id = self.tegraflash_get_magicid(tags[0])
-                    tags[1] = self.tegraflash_oem_sign_file(tags[1], magic_id)
+                    if values['--encrypt_key'] is None:
+                        tags[1] = self.tegraflash_oem_sign_file(tags[1], magic_id)
+                    else:
+                        tags[1] = self.tegraflash_oem_enc_and_sign_file(tags[1], magic_id)
                     binaries.extend([tags[1]])
 
-
         if values['--tegraflash_v2'] and values['--bl']:
+            values['--bl'] = self.tegraflash_concat_partition('A_cpu-bootloader', values['--cpubl'])
             values['--bl'] = self.tegraflash_oem_sign_file(values['--bl'], 'CPBL')
             binaries.extend([values['--bl']])
 
         if values['--cfg'] is not None :
-            info_print("Copying signed file in " + output_dir)
+            info_print("Copying enc\/signed file in " + output_dir)
             signed_files.extend(self.tegraflash_copy_signed_binaries(self.tegrahost_values['--signed_list'], output_dir))
             if self.tegrabct_values['--bct'] is None and not values['--external_device']:
                 raise tegraflash_exception("Unable to find bct file")
@@ -2705,7 +2642,10 @@ class TFlashT23x_Base(object):
         for signed_binary in binaries:
             info_print('Copying ' + signed_binary + ' to ' + output_dir)
             shutil.copyfile(signed_binary, output_dir + "/" + signed_binary)
-            info_print("Signed file: " + output_dir + "/" + signed_binary)
+            if values['--encrypt_key'] is None:
+                info_print("Signed file: " + output_dir + "/" + signed_binary)
+            else:
+                info_print("Signed and encrypted file: " + output_dir + "/" + signed_binary)
 
         if self.tegraparser_values['--pt'] is not None:
             shutil.copyfile(self.tegraparser_values['--pt'], output_dir + "/" + self.tegraparser_values['--pt'])
@@ -2716,6 +2656,10 @@ class TFlashT23x_Base(object):
             flash_index = "flash.idx"
             tegraflash_generate_index_file(output_dir + "/" + os.path.basename(values['--cfg']), flash_index, self.tegraparser_values['--pt'])
             shutil.copyfile(flash_index, output_dir + "/" + flash_index)
+
+    def tegraflash_encrypt_and_sign(self, exports, args=None):
+        # call tegraflash_sign(), but implement encryption handling inside tegraflash_sign()
+        self.tegraflash_sign(exports)
 
     def tegraflash_update_cfg_file(self, signed_files, cfg_file, output_dir, only_generated=False):
         secondary_gpt_found = None;
@@ -3079,10 +3023,22 @@ class TFlashT23x_Base(object):
             info_print("DCE binary: " + dce_bin_file)
         return dce_bin_file
 
-    def get_kerneldtb_filename(self):
-        kernel_dtb_file = values['--rawkerneldtb']
-        if kernel_dtb_file is not None:
-            info_print("Kernel DTB: " + kernel_dtb_file)
+    def get_dce_base_dtb_filename(self):
+        if values['--dce_base_dtb'] == None:
+            # Search order and note for each
+            # values['--rawkerneldtb'] => this is dtb filed specified in kernel-dtb partition
+            # values['--kerneldtb'] => this is passed to kernel, BL should only modify its content
+            # values['--bld'] => this is used by BL to setup hw
+            kernel_dtb_file = values['--rawkerneldtb']
+            if kernel_dtb_file is None:
+                kernel_dtb_file = values['--kerneldtb']
+                if kernel_dtb_file == None:
+                    kernel_dtb_file = values['--bldtb']
+            info_print("Kernel DTB used: " + str(kernel_dtb_file))
+        else:
+            kernel_dtb_file = values['--dce_base_dtb']
+            info_print("Use DCE base DTB as Kernel DTB: " + kernel_dtb_file)
+
         return kernel_dtb_file
 
     def update_dcecomb_filename(self, dcecomb_bin):
@@ -3103,6 +3059,26 @@ class TFlashT23x_Base(object):
         if dce_bin is None or kernel_dtb is None or dce_bin == '' or kernel_dtb == '':
             # There is no dce binary to concatenate. Just return.
             return None
+
+        # if --dce_overlay_dtb is defined, then we concatenate dce_base_dtb with fdtoverlay(overlay dtbs)
+        # else we default to dce_base_dtb. This can be either explicitly defined or default to kernel dtb
+
+        if values['--dce_overlay_dtb'] != None:
+            info_print('Concatenating %s to fdtoverlay(%s)' %(kernel_dtb, values['--dce_overlay_dtb']))
+            dtb_files = values['--dce_overlay_dtb'].replace(',', ' ')
+            file_name, file_ext = os.path.splitext(kernel_dtb)
+            kernel_dce_overlay_dtb = file_name + '_with_dce_overlay' + file_ext
+            # fdtoverlay -i <Base device tree>.dtb -o <Output device tree>.dtb [space separated list of overlay device tree Blobs (dtbs)]
+            try:
+                command = ["fdtoverlay"]
+                command.extend(["-i", kernel_dtb])
+                command.extend(["-o", kernel_dce_overlay_dtb])
+                command.extend([dtb_files])
+                run_command(command, False)
+                kernel_dtb = kernel_dce_overlay_dtb
+            except Exception as e:
+                raise tegraflash_exception('Unexpected error in creating: ' + kernel_dce_overlay_dtb + ' ' + str(e))
+
         info_print('Concatenating kernel-dtb to dce-fw binary')
 
         if not os.path.exists(dce_bin):
@@ -3206,25 +3182,26 @@ class TFlashT23x_Base(object):
 
     def get_file_name_from_images_list(self, bin_type):
         bin_file = None
+        try:
+            if values['--key'][0] == 'None':
+                algo_type = 'sbk'
+                algo_file = 'encrypt_file'
+            else:
+                algo_type = 'pkc' # Use this is OK for all algo
+                algo_file = 'signed_file'
+        except Exception as e:
+                algo_type = 'sbk'
+                algo_file = 'encrypt_file'
         with open(self.tegrahost_values['--signed_list'], 'r') as file:
             xml_tree = ElementTree.parse(file)
         root = xml_tree.getroot()
-        mode = root.get('mode')
-
         for file_node in root.findall('file'):
             if (file_node.get('type') == bin_type):
-                if mode == 'pkc':
-                    for pkc_node in file_node.iter('pkc'):
-                        bin_file = pkc_node.get('signed_file')
-                        if bin_file is not None:
-                            bin_file = bin_file.strip()
-                        break
-                if mode == 'sbk':
-                    for sbk_node in file_node.iter('sbk'):
-                        bin_file = sbk_node.get('encrypt_file')
-                        if bin_file is not None:
-                            bin_file = bin_file.strip()
-                        break
+                for node in file_node.iter(algo_type):
+                    bin_file = node.get(algo_file)
+                    if bin_file is not None:
+                        bin_file = bin_file.strip()
+                    break
         return bin_file
 
     def call_tegrasign(self, file_val, getmode, getmont, key,
@@ -3315,6 +3292,8 @@ class TFlashT23x(TFlashT23x_Base):
             # Fixed BCH offsets
             self.bch_offset = '4032'
             self.bch_length = '4160'
+
+            self.bpmpdtbodm = None
 
         else:
             raise tegraflash_exception("Unsupported Chip.")

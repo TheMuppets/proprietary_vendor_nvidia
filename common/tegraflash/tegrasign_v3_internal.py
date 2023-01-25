@@ -11,6 +11,7 @@ import stat
 import shutil
 from xml.etree import ElementTree
 from tegrasign_v3_util import *
+import hashlib
 
 def compute_sha(type, filename, offset, length, blockSize="0"):
     if type == 'sha256':
@@ -1245,7 +1246,7 @@ def do_derive_dk(dk, params, kdf_list, p_key):
     dk_list = params['DK']
 
     if dk in dk_list:
-        if p_key.kdf.chipid == '0x230':
+        if p_key.kdf.deviceid.is_t234() == True:
             params_slist = do_kdf_params_t234(dk, params, kdf_list)
         else:
             from tegrasign_v3_nvkey_load import do_kdf_params
@@ -1254,7 +1255,7 @@ def do_derive_dk(dk, params, kdf_list, p_key):
         return do_kdf(params_slist, kdf_list)
     raise tegrasign_exception('Can not derive %s' % (dk))
 
-def do_kdf_params_oem(dk, params, kdf_list, p_key):
+def do_kdf_params_oem_t234(dk, params, kdf_list, p_key):
     # Note some kdf is using string operation, some are hex operation
     is_hex = True
     is_str = False
@@ -1296,7 +1297,7 @@ def do_kdf_params_oem(dk, params, kdf_list, p_key):
             bl_kdk_params = params['KDK'][kdk_to_use]
             kdk_to_use = bl_kdk_params['KDK']
 
-            if p_key.kdf.chipid == '0x230':
+            if p_key.kdf.deviceid.is_t234() == True:
                 bl_kdk_ctx = {
                     'KDK'   : kdk_to_use,
                     'Label' : p_key.kdf.bl_label.get_strbuf(),
@@ -1383,6 +1384,286 @@ def do_kdf_params_oem(dk, params, kdf_list, p_key):
     return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, sbk_keystr, dec_kdk_ctx['Msg'],
             bl_kdk_ctx['Msg'], tz_kdk_ctx['Msg'], gp_kdk_ctx['Msg'], gpto_kdk_ctx['Msg'],  kdk_ctx['Msg'], dk_ctx['Msg']]
 
+def do_kdf_params_oem(dk, params, kdf_list, p_key):
+    # Note some kdf is using string operation, some are hex operation
+    is_hex = True
+    is_str = False
+    L = 256
+    basic_params = params['BASIC']
+
+    dk_params = params['DK'][dk]
+    dk_ctx = {
+        "KDK" : dk_params['KDK'],
+        'Label'   : p_key.kdf.label.get_strbuf(),
+        'Context' : p_key.kdf.context.get_strbuf(),
+    }
+
+    dk_ctx["Msg"] = get_composed_msg(dk_ctx['Label'], dk_ctx['Context'], L, is_hex)
+
+    kdk_params = params['KDK'][dk_ctx['KDK']]
+    kdk_to_use = kdk_params['KDK']
+    kdk_upstream = kdk_to_use
+    kdk_ctx = {
+        "KDK" : kdk_to_use,
+        "Label" : kdk_params["Label"],
+    }
+
+    kdk_ctx['Msg'] = get_composed_msg(kdk_ctx['Label'], '', L, is_str)
+    bl_kdk_ctx = {}
+    fw_kdk_ctx = {}
+    gp_kdk_ctx = {}
+    gpto_kdk_ctx = {}
+    tz_kdk_ctx = {}
+    rcm_kdk_ctx = {}
+    bl_kdk_ctx['Msg'] = None
+    fw_kdk_ctx['Msg'] = None
+    gp_kdk_ctx['Msg'] = None
+    gpto_kdk_ctx['Msg'] = None
+    tz_kdk_ctx['Msg'] = None
+    rcm_kdk_ctx['Msg'] = None
+
+    sbk_list = ['SBK_NVMB_KDK', 'SBK_TZ_KDK', 'SBK_GP_KDK', 'SBK_GP_TOSB_KDK', 'SBK_FW_KDK']
+    count = len(sbk_list)
+    while kdk_to_use in sbk_list and (count>0):
+        # Check if sbk_bl_kdk is defined for this dk
+        if 'SBK_NVMB_KDK' in kdk_to_use:
+            bl_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = bl_kdk_params['KDK']
+
+            if p_key.kdf.deviceid.is_t234() == True:
+                bl_kdk_ctx = {
+                    'KDK'   : kdk_to_use,
+                    'Label' : p_key.kdf.bl_label.get_strbuf(),
+                }
+                bl_kdk_ctx['Msg'] = get_composed_msg(bl_kdk_ctx['Label'], '', L, is_hex)
+            else:
+                bl_kdk_ctx = {
+                    'KDK'   : kdk_to_use,
+                    'Label' : bl_kdk_params['Label'],
+                    'Context' : p_key.kdf.bl_label.get_strbuf(),
+                }
+                bl_kdk_ctx['Msg'] = get_composed_msg(bl_kdk_ctx['Label'], bl_kdk_ctx['Context'], L, False)
+
+        elif 'SBK_TZ_KDK' in kdk_to_use:
+            tz_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = tz_kdk_params['KDK']
+            tz_kdk_ctx = {
+                'KDK'   : kdk_to_use,
+                'Label' : p_key.kdf.tz_label.get_strbuf()
+            }
+
+            tz_kdk_ctx['Msg'] = get_composed_msg(tz_kdk_ctx['Label'], '', L, is_hex)
+
+        elif 'SBK_GP_KDK' in kdk_to_use:
+            gp_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = gp_kdk_params['KDK']
+            gp_kdk_ctx = {
+                'KDK'   : kdk_to_use,
+                'Label' : p_key.kdf.gp_label.get_strbuf()
+            }
+
+            gp_kdk_ctx['Msg'] = get_composed_msg(gp_kdk_ctx['Label'], '', L, is_hex)
+
+        elif 'SBK_GP_TOSB_KDK' in kdk_to_use:
+            gpto_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = gpto_kdk_params['KDK']
+            gpto_kdk_ctx = {
+                'KDK'   : kdk_to_use,
+                'Label' : '544F5342', # 'TOSB'
+            }
+
+            gpto_kdk_ctx['Msg'] = get_composed_msg(gpto_kdk_ctx['Label'], '', L, is_hex)
+
+        # Check if sbk_fw_kdk is defined for this dk
+        elif 'SBK_FW_KDK' in kdk_to_use:
+            fw_kdk_params = params['KDK'][kdk_to_use]
+            kdk_to_use = fw_kdk_params['KDK']
+            fw_kdk_ctx = {
+                "KDK"   : kdk_to_use,
+                "Label" : p_key.kdf.fw_label.get_strbuf(),
+            }
+
+            fw_kdk_ctx['Msg'] = get_composed_msg(fw_kdk_ctx['Label'], '', L, is_hex)
+
+        count = count - 1
+
+    aes_params = params['AES'][kdk_to_use]
+    aes_iv = manifest_xor_offset(basic_params[aes_params['IV']], aes_params["Offset"])
+    aes_aad = aes_params['Manifest'] + AAD_0_96
+    aes_tag = bytes(16)
+
+    dec_kdk_params = params['DEC_KDK'][aes_params['KDK']]
+
+    dec_kdk_ctx = {
+        'KDK'   : basic_params[dec_kdk_params['KDK']],
+        'KDD'   : basic_params[dec_kdk_params['KDD']],
+        "Label" : dec_kdk_params["Label"],
+    }
+
+    dec_kdk_ctx["Msg"] = get_composed_msg(dec_kdk_ctx['Label'], '', L, is_str)
+
+    # Pop the elements that are no longer needed
+    while (len(kdf_list) > KdfArg.DKSTR):
+        kdf_list.pop()
+
+    # Replace sbk key str if the sbk key file is found
+    sbk_keystr = aes_params["Plain"]
+    if p_key.filename != None and os.path.exists(p_key.filename):
+        with open(p_key.filename, 'rb') as f:
+            key_buf = bytearray(f.read())
+            if extract_AES_key(key_buf, p_key):
+                sbk_keystr = hex_to_str(p_key.key.aeskey)
+
+    return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, sbk_keystr, dec_kdk_ctx['Msg'],
+            bl_kdk_ctx['Msg'], tz_kdk_ctx['Msg'], gp_kdk_ctx['Msg'], gpto_kdk_ctx['Msg'],  kdk_ctx['Msg'], dk_ctx['Msg']]
+
+# calls for offset, then enc, then do sha and returns
+def do_kdf_oem_enc(kdf_list, p_key, blockSize):
+
+    p_key.kdf.flag = DerKey.SBK_PT
+    file_base, file_ext = os.path.splitext(p_key.src_file)
+    temp_stem = file_base + '_tmp'
+    enc_file = temp_stem  + file_ext
+    final_file = file_base + '_encrypt'  + file_ext
+    kdf_yaml = 'kdf_args_%s.yaml' %(temp_stem)
+    shutil.copyfile(p_key.src_file, enc_file)
+
+    command = exec_file(TegraOpenssl)
+    command.extend(['--chip'])
+    command.extend(p_key.kdf.deviceid.chipid_all())
+    if p_key.kdf.bootmode != None and p_key.kdf.bootmode.upper() == 'RCM':
+        command.extend(['--isRcmBoot'])
+    command.extend(['--oem_encrypt', enc_file, kdf_yaml])
+
+    ret_str = run_command(command)
+    with open(enc_file, 'rb') as f:
+        src = bytearray(f.read())
+
+    patt = 'kdf_args_' + temp_stem + '.yaml'
+    pattd = re.compile('kdf_args_' + temp_stem + '(\d).yaml')
+    contents = os.listdir('.')
+
+    for f in contents:
+        md = pattd.match(f)
+
+        if (md and len(md.groups()) > 0) or (f == patt):
+            p_key.kdf.parse_file(p_key, f)
+            dk, params = load_params_oem(p_key)
+            dk_list = params['DK']
+            if dk not in dk_list:
+                raise tegrasign_exception('Can not derive %s' % (dk))
+
+            pay_off = int.from_bytes(p_key.kdf.pay_off.get_hexbuf(),  "little")
+            pay_sz = int.from_bytes(p_key.kdf.pay_sz.get_hexbuf(),  "little")
+            kdf_list = [p_key.kdf.iv.get_hexbuf(), p_key.kdf.aad.get_hexbuf(), p_key.kdf.tag.get_hexbuf(), \
+                    src[pay_off:pay_off+pay_sz], p_key.kdf.flag, p_key.kdf.label.get_hexbuf(), p_key.kdf.context.get_hexbuf(), \
+                    p_key.kdf.bl_label.get_hexbuf(), p_key.kdf.fw_label.get_hexbuf()]
+
+            if p_key.kdf.deviceid.is_t234() == True:
+                params_slist = do_kdf_params_oem_t234(dk, params, kdf_list, p_key)
+            else:
+                params_slist = do_kdf_params_oem(dk, params, kdf_list, p_key)
+
+            # if user kdk is enabled, only params_slist[10] (DkMsg) is required.
+            if p_key.kdf.enc == 'USER_KDK':
+                do_kdf_with_user_kdk(params_slist[10], p_key, blockSize)
+            else:
+                if (do_kdf_oem(params_slist, kdf_list, blockSize) == False):
+                    return False
+            tag_off = int.from_bytes(p_key.kdf.tag_off.get_hexbuf(),  "little")
+            # pad the tag and encrypted buffer
+            src[pay_off:pay_off+pay_sz] = kdf_list[KdfArg.SRC][:]
+            src[tag_off:tag_off+len(kdf_list[KdfArg.TAG])] = kdf_list[KdfArg.TAG]
+            if md:
+                enc_file = temp_stem + str(md.group(1)) + '_encrypt'
+            else:
+                enc_file = temp_stem + '_encrypt'
+            with open(enc_file, 'wb') as enc_f:
+                enc_f.write(src)
+
+            enc_file_sha = compute_sha('sha512', enc_file, pay_off, pay_sz)
+
+            with open(enc_file_sha, 'rb') as enc_f:
+                dgt_buf = bytearray(enc_f.read())
+                dgt_off = int.from_bytes(p_key.kdf.dgt_off.get_hexbuf(),  "little")
+                src[dgt_off:dgt_off+len(dgt_buf[:])] = dgt_buf[:]
+                kdf_list[KdfArg.SRC][:] = src[:]
+            os.remove(f)
+            os.remove(enc_file)
+            os.remove(enc_file_sha)
+    with open(final_file, 'wb') as f:
+        f.write(src)
+    return True
+
+def do_kdf_with_user_kdk(DkMsgStr, p_key, blockSize):
+    DkMsg = str_to_hex(DkMsgStr)
+    p_key.key.aeskey = do_hmac_sha256(DkMsg, len(DkMsg), p_key)
+    p_key.block_size = int(blockSize)
+
+    iv  = p_key.kdf.iv.get_hexbuf()
+    aad  = p_key.kdf.aad.get_hexbuf()
+    tag  = p_key.kdf.tag.get_hexbuf()
+
+    if (type(p_key.kdf.verify) == int):
+        verify_bytes = p_key.kdf.verify
+    else:
+        verify_bytes = len(p_key.kdf.verify) + 1
+
+    if p_key.block_size == 0:
+        p_key.src_buf = do_aes_gcm(p_key.src_buf, len(p_key.src_buf), p_key, iv, aad, tag, verify_bytes, True)
+        return;
+
+    # Use block_size to do metablob encryption
+    iv_off = 0
+    iv_size = 12
+    tag_off = 12
+    tag_size = 16
+    dgt_off = 28
+    dgt_size = 64
+    blob_sz = iv_size + tag_size + dgt_size
+
+    last_blk_len = p_key.len % p_key.block_size
+    blk_cnt = int(p_key.len / p_key.block_size) + (1 if (last_blk_len != 0) else 0)
+    blob_alloc_sz = blob_sz * (blk_cnt + 1)
+    blob_buf = bytearray(blob_alloc_sz)
+
+    # Get ramdom strings
+    p_key.ran.size = iv_size
+    p_key.ran.count = blk_cnt - 1 # Use p_key's IV for the first itereation
+    p_key.Sha = Sha._512
+    do_random(p_key)
+
+    # write blk_cnt to the first blob
+    blob_buf[0:4] = int_2bytes(4, blk_cnt)
+
+    for i in range(blk_cnt):
+        if i+1 == blk_cnt:
+            p_key.len = last_blk_len
+        else:
+            p_key.len = p_key.block_size
+
+        start = i * p_key.block_size
+        end = start + p_key.len
+
+        p_key.src_buf[start:end] = do_aes_gcm(p_key.src_buf[start:end], p_key.len, p_key, iv, aad, tag, verify_bytes, True)
+        buff = bytearray(hashlib.sha512(p_key.src_buf[start:end]).digest())
+
+        # Start writing to the 2nd blob b/c first blob has the blk_cnt
+        start = (i+1) * blob_sz
+        end = start + iv_size
+        blob_buf[start+iv_off:start+iv_off+iv_size] = p_key.kdf.iv.get_hexbuf()
+        blob_buf[start+tag_off:start+tag_off+tag_size] = p_key.kdf.tag.get_hexbuf()
+        blob_buf[start+dgt_off:start+dgt_off+dgt_size] = buff[:]
+
+        # Get iv for the next itereation
+        start = i * iv_size
+        end = start + iv_size
+        p_key.kdf.iv.set_buf(p_key.ran.buf[start:end])
+
+    p_key.len = len(p_key.src_buf)
+    # Save blob to the tag field
+    p_key.kdf.tag.set_buf(blob_buf)
+
 def do_kdf_oem(params_slist, kdf_list, blockSize):
     if is_hsm():
         from tegrasign_v3_hsm import do_kdf_oem_hsm
@@ -1406,7 +1687,7 @@ def do_kdf_oem(params_slist, kdf_list, blockSize):
     raw_file = open_file(raw_name, 'wb')
 
     # to write to file
-    # order: sizes then data for: deckdk_kdkkdd, deckdk_iv, deckdk_aad, deckdk_plain, deckdk_msg, tzkdk_msg, gpkdk_msg,
+    # order: sizes then data for: deckdk_kdkkdd, deckdk_iv, deckdk_aad, sbk_plain, deckdk_msg, tzkdk_msg, gpkdk_msg,
     #        gptokdk_msg, kdk_msg, dk_msg, iv, aad, tag, src, flag, result_name
 
     for param in params_slist:
@@ -1470,7 +1751,11 @@ def do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize):
     dk_list = params['DK']
 
     if dk in dk_list:
-        params_slist = do_kdf_params_oem(dk, params, kdf_list, p_key)
+        if p_key.kdf.deviceid.is_t234() == True:
+            params_slist = do_kdf_params_oem_t234(dk, params, kdf_list, p_key)
+        else:
+            from tegrasign_v3_nvkey_load import do_kdf_params_oem
+            params_slist = do_kdf_params_oem(dk, params, kdf_list, p_key)
 
         return do_kdf_oem(params_slist, kdf_list, blockSize)
     raise tegrasign_exception('Can not derive %s' % (dk))
@@ -1478,8 +1763,22 @@ def do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize):
 def map_bin_to_dk_oem(p_key, params):
     if p_key.kdf.dk != None:
         return p_key.kdf.dk
-    enc_file = p_key.src_file
+
     magicid = p_key.kdf.magicid
+    if magicid != None:
+        # To find the DK for this magic id
+        kdk_params = params.get('KDK')
+        dk_params = params.get('DK')
+        for kdk in kdk_params:
+            kdk_val = kdk_params.get(kdk)
+            if len(kdk_val) == 1:
+                continue
+            if kdk_val['Label'] == magicid:
+                for dk in dk_params:
+                   if (kdk == dk_params.get(dk)['KDK']):
+                       return dk
+
+    enc_file = p_key.src_file
     basename = os.path.splitext(os.path.basename(enc_file))[0].lower()
     ext = os.path.splitext(os.path.basename(enc_file))[1].lower()
 
@@ -1530,8 +1829,8 @@ def map_bin_to_dk_oem(p_key, params):
 
     if 'mb2_bct' in basename:
         return 'SBK_MB2BCT_DK'
-
-    if 'mb2' in basename:
+    # MB2RF will also have mb2 in base name, so check additionally with magic-id
+    if 'mb2' in basename and magicid == 'MB2B':
         return 'SBK_MB2_DK'
 
     if 'mce' in basename:
@@ -1589,29 +1888,17 @@ def map_bin_to_dk_oem(p_key, params):
     if 'os' in basename or 'hv' in basename:
         return 'SBK_OS_DK'
 
-    if magicid != None:
-        # To find the DK for this magic id
-        kdk_params = params.get('KDK')
-        dk_params = params.get('DK')
-        for kdk in kdk_params:
-            kdk_val = kdk_params.get(kdk)
-            if len(kdk_val) == 1:
-                continue
-            if kdk_val['Label'] == magicid:
-                for dk in dk_params:
-                   if (kdk == dk_params.get(dk)['KDK']):
-                       return dk
     raise tegrasign_exception('Can not identify the key choice for %s' % (enc_file))
 
 def load_params_oem(p_key):
-    chipid = p_key.kdf.chipid
-    if p_key.kdf.chipid == '0x230':
+    if p_key.kdf.deviceid.is_t234() == True:
         import yaml
         cfg_file = 'tegrasign_v3_oemkey.yaml'
         if os.path.exists(cfg_file) == False:
             cfg_file = script_dir + 'tegrasign_v3_oemkey.yaml'
         with open(cfg_file) as f:
             params = yaml.safe_load(f)
+        chipid = p_key.kdf.deviceid.chipid()
         dk = map_bin_to_dk_oem(p_key, params['DER_OEM'][chipid])
         return dk, params['DER_OEM'][chipid]
 
@@ -1731,13 +2018,16 @@ def do_key_derivation(p_key, kdf_list, blockSize):
     try:
         info_print('Perform key derivation on ' + p_key.src_file)
 
-        if (kdf_list[KdfArg.FLAG] <= DerKey.NVPDS):
+        if p_key.kdf.enc == 'OEM' or p_key.kdf.enc == 'USER_KDK':
+            return do_kdf_oem_enc(kdf_list, p_key, blockSize)
+
+        elif (kdf_list[KdfArg.FLAG] <= DerKey.NVPDS):
             from tegrasign_v3_nvkey_load import load_params
             dk, params = load_params(p_key)
             return do_derive_dk(dk, params, kdf_list, p_key)
-        else:
-            dk, params = load_params_oem(p_key)
-            return do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize)
+
+        dk, params = load_params_oem(p_key)
+        return do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize)
 
     except ImportError as e:
         raise tegrasign_exception('Please check setup. Could not find ' + str(e))

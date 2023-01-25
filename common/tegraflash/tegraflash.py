@@ -62,7 +62,7 @@ cmd_environ.update(os.environ.copy())
 paths.update({'OUT':None, 'BIN':None, 'SCRIPT':None, 'TMP':None, 'WD':os.getcwd()})
 
 exports = {
-            "--bct":None, "--bct_cold_boot":None, "--key":'None', "--encrypt_key":None, "--cfg":None, "--bl":None,
+            "--bct":None, "--bct_cold_boot":None, "--key":'None', "--encrypt_key":None, "--enable_user_kdk":False, "--cfg":None, "--bl":None,
             "--board":None, "--eeprom":None, "--cmd":None, "--instance":None, "--bpfdtb":None,
             "--hostbin":None, "--applet":None,"--dtb":None, "--bldtb":None, "--kerneldtb":None, "--chip":None,
             "--out":None, "--nct":None, "--fb":None, "--odmdata":None, "--overlay_dtb":None, "--ecid":None,
@@ -76,15 +76,17 @@ exports = {
             "--scr_cold_boot_config":None, "--br_cmd_config":None, "--prod_config":None,
             "--device_config":None, "--applet-cpu":None, "--bpf":None, "--mb1_bct":None, "--mb2_bct":None,
             "--mb1_cold_boot_bct":None, "--mb2_cold_boot_bct":None, "--skipsanitize":False, "--tegraflash_v2":False,
-            "--chip_major":"0", "--nv_key":None, "--nvencrypt_key":None, "--cl":"39314184",
+            "--chip_major":"0", "--chip_minor":"0", "--nv_key":None, "--nvencrypt_key":None, "--cl":"39314184",
             "--soft_fuses":None, "--deviceprod_config":None, "--rcm_bct":None, "--secureboot":False,
             "--mem_bct":None, "--mem_bct_cold_boot":None, "--minratchet_config":None,
             "--wb0sdram_config":None, "--blversion":None, "--output_dir":None, "--nv_nvratchet":"0",
             "--nv_oemratchet":"0", "--image_dirs":None, "--trim_bpmp_dtb":False, "--cpubl":None,
             "--concat_cpubl_bldtb":False, "--external_device":False, "--cust_info": None,
-            "--fuse_info": None, "--sparseupdate": False, "--ratchet_blob":None, "--applet_softfuse":None,
+            "--sparseupdate": False, "--ratchet_blob":None, "--applet_softfuse":None,
             "--secondary_gpt_backup":False, "--boot_chain":None, "--bct_backup":False,
             "--mb1_bin":None, "--psc_bl1_bin":None,
+            "--rcmboot_pt_layout": None, "--coldboot_pt_layout": None, "--rcmboot_bct_cfg": None,
+            "--coldboot_bct_cfg": None, "--dce_base_dtb": None, "--dce_overlay_dtb": None,
           }
 
 exit_on_error = False
@@ -93,7 +95,7 @@ def usage():
     print( '\n'.join([
     '  Usage: tegraflash [--bct <file>] [--bct_cold_boot <file>] [--cfg <file>] [--bl <file>] [--instance <number>]',
     '                    [--chip <number>] [--ecid <ecid>] [--dtb <file>] [--bldtb <file>] [--kerneldtb <file>]',
-    '                    [--key <file>] [--encrypt_key <file> [--cmd \"commands\"] [--bpfldtb <file>]',
+    '                    [--key <file>] [--encrypt_key <file>] [--enable_user_kdk] [--cmd \"commands\"] [--bpfldtb <file>]',
     '                    [--applet <file>] [--nct <file>] [--hostbin <dir>] [--out <dir>]',
     '                    [--boardconfig <file>] [--skipuid] [--securedev] [--keyindex <number>]',
     '                    [--bl-load <addr>] [--dev_params <file>] [--sdram_config <file>] [--ramcode <index>]',
@@ -108,6 +110,9 @@ def usage():
     '                    [--overlay_dtb <dtb files>] [--cust_info <file>] [--sparseupdate]',
     '                    [--secondary_gpt_backup] [--boot_chain <A|B>] [--bct_backup]',
     '                    [--mb1_bin] [--psc_bl1_bin]',
+    '                    [--coldboot_pt_layout], [--rcmboot_pt_layout], [--coldboot_bct_cfg], [--rcmboot_bct_cfg]'
+    '                    [--dce_base_dtb], [--dce_overlay_dtb]'
+
     '   ',
     '   --bct           : Bootrom Boot Config Table file',
     '   --bct_cold_boot  : Bootrom Boot Config Table file for cold boot',
@@ -118,11 +123,14 @@ def usage():
     '   --ecid          : ECID',
     '   --blversion     : Major and Minor version of bootloader loaded by BOOTROM',
     '   --dtb           : DTB file to be used by both (old implementation, to deprecate in future)',
+    '   --dce_base_dtb     : Specify base DTB file specifically used for DCE',
+    '   --dce_overlay_dtb  : Specify a list of comma seperated dtbs to be specifically applied to DCE base dtb',
     '   --bldtb         : DTB file to be used by cboot',
     '   --kerneldtb     : DTB file to be used by kernel',
     '   --bpfdtb       : DTB file to be used by BPMP-FW',
     '   --key           : Key for signing required files',
     '   --encrypt_key   : Key for encrypting required files',
+    '   --enable_user_kdk : Enable user defined KDK',
     '   --applet        : Applet to be sent to BootRom',
     '   --nct           : NCT file',
     '   --boardconfig   : File containing board configuration',
@@ -172,7 +180,6 @@ def usage():
     '                   : gbe-uphy-config_1,nvhs-uphy-config_2,hsio-uphy-config_3,gbe0-mode-10g (nn T234 example)',
     '   --overlay_dtb   : a list of comma seperated dtbs to be applied to base dtb',
     '   --cust_info     : customer data to be filled into BR-BCT',
-    '   --fuse_info     : fuse information xml for generating fuse_info binary',
     '   --sparseupdate  : only flash partitions that have changed. Currently only support SPI flash memory ',
     '   --secondary_gpt_backup : flash secondary GPT backup partition',
     '   --bct_backup    : flash BCT backup partition as well when flashing BCT partition',
@@ -1227,12 +1234,13 @@ if __name__ == '__main__':
                "pinmux_config=", "scr_config=", "scr_cold_boot_config=",
                "pmc_config=", "pmic_config=", "gpioint_config=", "uphy_config=", "br_cmd_config=",
                "prod_config=", "device_config=", "applet-cpu=", "bpf=", "skipsanitize",
-               "encrypt_key=", "nv_key=", "nvencrypt_key=", "cl=", "soft_fuses=", "cust_info=", "fuse_info=",
+               "encrypt_key=", "enable_user_kdk", "nv_key=", "nvencrypt_key=", "cl=", "soft_fuses=", "cust_info=",
                "deviceprod_config=", "rcm_bct=","mem_bct=", "mem_bct_cold_boot=", "mb1_cold_boot_bct=", "wb0sdram_config=",
                "minratchet_config=", "blversion=", "output_dir=", "nv_nvratchet=", "nv_oemratchet=", "image_dirs=",
                "trim_bpmp_dtb", "cpubl=", "concat_cpubl_bldtb", "external_device", "sparseupdate", "ratchet_blob=",
                "applet_softfuse=", "secondary_gpt_backup", "boot_chain=", "bct_backup",
-               "mb1_bin=", "psc_bl1_bin="]
+               "mb1_bin=", "psc_bl1_bin=", "rcmboot_pt_layout=", "coldboot_pt_layout=", "rcmboot_bct_cfg=", "coldboot_bct_cfg=",
+               "dce_base_dtb=", "dce_overlay_dtb="]
 
     try:
       opts, args = getopt.getopt(sys.argv[1:], "h", options)
@@ -1274,6 +1282,9 @@ if __name__ == '__main__':
 
     if '--bct_backup' in sys.argv[1:]:
         exports['--bct_backup'] = True
+
+    if '--enable_user_kdk' in sys.argv[1:]:
+        exports['--enable_user_kdk'] = True
 
     abs_path = ['--bct', '--rcm_bct', '--cfg', '--bl', '--hostbin', '--key', '--encrypt_key', '--out', '--dtb', '--bldtb', '--kerneldtb',
                 '--nct', '--applet', '--fb', '--lnx', '--tos', '--eks', '--wb', '--bpfdtb', '--applet_softfuse',
@@ -1320,8 +1331,11 @@ if __name__ == '__main__':
     if exports['--rcm_bct'] is None:
         exports['--rcm_bct'] = exports['--bct']
 
-    if len(chip) == 2:
+    if len(chip) >= 2:
         exports['--chip_major'] = chip[1]
+
+    if len(chip) >= 3:
+        exports['--chip_minor'] = chip[2]
 
     if (int(exports['--chip'], 0) != 0x21):
         exports['--tegraflash_v2'] = True

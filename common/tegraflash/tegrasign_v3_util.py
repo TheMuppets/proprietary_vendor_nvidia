@@ -165,6 +165,42 @@ class HSM:
     def is_fskp_mode(self):
         return self.type in [KeyType.FSKP_AK, KeyType.FSKP_EK, KeyType.FSKP_KDK, KeyType.FSKP]
 
+class DeviceId:
+    def __init__(self, arr = None):
+        # In string format
+        self.id = '0'
+        self.major = '0'
+        self.minor = '0'
+
+    def parse(self, arg):
+        try:
+            # Possible formats: '<id><major>', '<id><major> <minor>', '<id> <major> <minor>'
+            sublist = arg.strip().split(' ')
+            if len(sublist) == 3:
+                self.id = sublist[0]
+                self.major = sublist[1]
+                self.minor = sublist[2]
+            elif len(sublist) == 2:
+                self.id = sublist[0][:-1]
+                self.major = sublist[0][-1]
+                self.minor = sublist[1]
+            elif len(sublist) == 1:
+                self.id = sublist[0][:-1]
+                self.major = sublist[0][-1]
+            else:
+                raise tegrasign_exception('Unknown \"%s\" parsed for chipid' %(arg))
+        except Exception as e:
+            raise tegrasign_exception('Unknown \"%s\" parsed for chipid due to %s' %(arg, e))
+
+    def is_t234(self):
+        return self.id == '0x23' and self.major == '0'
+
+    def chipid(self):
+        return '%s%s' %(self.id, self.major)
+
+    def chipid_all(self):
+        return [self.id, self.major, self.minor]
+
 class KDF:
     def __init__(self):
         self.iv = Token('00000000000000000000000000000000') #Set default value
@@ -177,15 +213,22 @@ class KDF:
         self.tz_label = Token('0000000000000000')
         self.gp_label = Token('0000000000000000')
         self.context = Token('0000000000000000')
-        self.chipid = ''
+        self.tag_off = Token()
+        self.pay_off = Token()
+        self.pay_sz = Token()
+        self.dgt_off = Token()
+        self.deviceid = DeviceId()
         self.dk = None
         self.magicid = None
         self.type = KdfType.CBC
         self.msg = None
+        self.flag = DerKey.DEV
+        self.der_key = None
+        self.der_root = None
+        self.enc = None
+        self.bootmode = None
 
-    def parse_file(self, p_key, arg, internal):
-        kdf_file = arg.split('=')[1]
-
+    def parse_file(self, p_key, kdf_file, internal = None):
         try:
             with open(kdf_file) as f:
                 params = yaml.safe_load(f)
@@ -194,16 +237,17 @@ class KDF:
 
         tokens = {'IV':'--iv', 'AAD':'--aad', 'VER':None, 'DERSTR':None, 'CHIPID':None,
                   'MAGICID':None, 'FLAG':None, 'BL_DERSTR':None, 'FW_DERSTR':None,
-                  'TZ_DERSTR':None, 'GP_DERSTR':None, 'DERKEY':None,}
+                  'TZ_DERSTR':None, 'GP_DERSTR':None, 'DERKEY':None, 'DERROOT': None, 'PAYLOAD_OFF':None,
+                  'PAYLOAD_SZ':None, 'DIGEST_OFF':None, 'TAG_OFF':None, 'ENC':None, 'BOOTMODE':None }
         for token in tokens:
             if token in params:
                 # Update the entries if they are found in internal dict
-                if tokens.get(token) in internal:
+                if internal != None and tokens.get(token) in internal:
                     internal[tokens.get(token)] = params.get(token)
                 if token == 'AAD':
                     self.aad.parse(params.get(token))
                 elif token == 'CHIPID':
-                    self.chipid = params.get(token)
+                    self.deviceid.parse(params.get(token))
                 elif token == 'FLAG':
                     flag_val = params.get(token).upper()
                     if flag_val == 'DEV':
@@ -221,6 +265,8 @@ class KDF:
                         self.iv.parse(params.get(token))
                 elif token == 'DERKEY':
                     self.dk = params.get(token)
+                elif token == 'DERROOT':
+                    self.der_root = params.get(token)
                 elif token == 'DERSTR':
                     self.label.parse(params.get(token))
                 elif token == 'BL_DERSTR':
@@ -231,19 +277,20 @@ class KDF:
                     self.tz_label.parse(params.get(token))
                 elif token == 'GP_DERSTR':
                     self.gp_label.parse(params.get(token))
+                elif token == 'DIGEST_OFF':
+                    self.dgt_off.parse(params.get(token))
+                elif token == 'PAYLOAD_OFF':
+                    self.pay_off.parse(params.get(token))
+                elif token == 'PAYLOAD_SZ':
+                    self.pay_sz.parse(params.get(token))
+                elif token == 'TAG_OFF':
+                    self.tag_off.parse(params.get(token))
                 elif token == 'MAGICID':
                     self.magicid = params.get(token)
-
-        p_key.src_file = internal['--file']
-        p_key.filename = internal['--key']
-        p_key.mode = NvTegraSign_FSKP
-        if internal['--hsm']:
-            p_key.mode = p_key.hsm.type
-        else:
-            p_key.hsm.type == KeyType.UNKNOWN
-        internal["--enc"] = 'aesgcm'
-        self.type = KdfType.GCM
-        p_key.key.aeskey = str_to_hex('0123456789abcdef0123456789abcdef') # Preset so not to skip enc when doing is_zero_aes check
+                elif token == 'ENC':
+                    self.enc = params.get(token)
+                elif token == 'BOOTMODE':
+                    self.bootmode = params.get(token)
 
     def parse(self, p_key, internal):
         kdf_arg = internal['--kdf']
@@ -255,9 +302,21 @@ class KDF:
             elif 'label=' in arg_low:
                 self.label.parse(arg)
             elif 'kdf_file=' in arg_low:
-                self.parse_file(p_key, arg, internal)
+                kdf_file = arg.split('=')[1]
+                self.parse_file(p_key, kdf_file, internal)
             else:
                 raise tegrasign_exception('Unknown argument parsed ' + arg)
+        p_key.src_file = internal['--file']
+        p_key.filename = internal['--key']
+        p_key.mode = NvTegraSign_FSKP
+        if internal['--hsm']:
+            p_key.mode = p_key.hsm.type
+        else:
+            p_key.hsm.type == KeyType.UNKNOWN
+        if internal['--sign'] == None:
+            internal["--enc"] = 'aesgcm'
+        self.type = KdfType.GCM
+        p_key.key.aeskey = str_to_hex('0123456789abcdef0123456789abcdef') # Preset so not to skip enc when doing is_zero_aes check
 
     def get_hexmsg(self):
         return str_to_hex(self.msg)

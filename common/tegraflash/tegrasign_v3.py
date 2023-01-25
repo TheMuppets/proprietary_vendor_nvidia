@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2018-2021, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2022, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -33,7 +33,7 @@ internal = {
             "--verify" : None,
             "--verbose": None,
             "--random" : None,
-            "--block": None
+            "--block"  : "0"
           }
 
 def clear_internal():
@@ -53,7 +53,7 @@ def clear_internal():
     internal["--sign"] = None
     internal["--verify"] = None
     internal["--verbose"] = None
-    internal["--block"] = None
+    internal["--block"] = "0"
 
 
 def print_help():
@@ -327,6 +327,8 @@ def print_args(internal):
             argstr += ' --length ' + internal["--length"]
         if internal["--list"]:
             argstr += ' --list ' + internal["--list"]
+        if internal["--kdf"]:
+            argstr += ' --kdf ' + ' '.join(internal["--kdf"])
 
         if internal["--getmode"]:
             # check to see if it's a list
@@ -530,6 +532,8 @@ def tegrasign(args_file, args_getmode, args_getmont, args_key, args_length, args
                                     p_keylist[0].kdf.bl_label.get_hexbuf(), p_keylist[0].kdf.fw_label.get_hexbuf()]
                         if (do_key_derivation(p_keylist[0], kdf_list, internal["--block"]) != True):
                             return exit_routine()
+                        if (p_keylist[0].kdf.enc == 'OEM' or p_keylist[0].kdf.enc == 'USER_KDK'):
+                            return True
                         fileNm, fileExt = os.path.splitext(p_keylist[0].src_file)
                         enc_file = fileNm + '_encrypt' + fileExt
                         tag_file = fileNm + '.tag'
