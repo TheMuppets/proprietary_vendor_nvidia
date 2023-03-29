@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2023, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -1566,7 +1566,7 @@ def do_kdf_oem_enc(kdf_list, p_key, blockSize):
 
             # if user kdk is enabled, only params_slist[10] (DkMsg) is required.
             if p_key.kdf.enc == 'USER_KDK':
-                do_kdf_with_user_kdk(params_slist[10], p_key, blockSize)
+                do_kdf_with_user_kdk(params_slist[10], kdf_list, p_key, blockSize)
             else:
                 if (do_kdf_oem(params_slist, kdf_list, blockSize) == False):
                     return False
@@ -1587,7 +1587,7 @@ def do_kdf_oem_enc(kdf_list, p_key, blockSize):
                 dgt_buf = bytearray(enc_f.read())
                 dgt_off = int.from_bytes(p_key.kdf.dgt_off.get_hexbuf(),  "little")
                 src[dgt_off:dgt_off+len(dgt_buf[:])] = dgt_buf[:]
-                kdf_list[KdfArg.SRC][:] = src[:]
+                kdf_list[KdfArg.SRC] = src[:]
             os.remove(f)
             os.remove(enc_file)
             os.remove(enc_file_sha)
@@ -1595,7 +1595,7 @@ def do_kdf_oem_enc(kdf_list, p_key, blockSize):
         f.write(src)
     return True
 
-def do_kdf_with_user_kdk(DkMsgStr, p_key, blockSize):
+def do_kdf_with_user_kdk(DkMsgStr, kdf_list, p_key, blockSize):
     DkMsg = str_to_hex(DkMsgStr)
     p_key.key.aeskey = do_hmac_sha256(DkMsg, len(DkMsg), p_key)
     p_key.block_size = int(blockSize)
@@ -1610,7 +1610,8 @@ def do_kdf_with_user_kdk(DkMsgStr, p_key, blockSize):
         verify_bytes = len(p_key.kdf.verify) + 1
 
     if p_key.block_size == 0:
-        p_key.src_buf = do_aes_gcm(p_key.src_buf, len(p_key.src_buf), p_key, iv, aad, tag, verify_bytes, True)
+        kdf_list[KdfArg.SRC] = do_aes_gcm(kdf_list[KdfArg.SRC], len(kdf_list[KdfArg.SRC]), p_key, iv, aad, tag, verify_bytes, True)
+        kdf_list[KdfArg.TAG] = p_key.kdf.tag.get_hexbuf()
         return;
 
     # Use block_size to do metablob encryption
@@ -1645,8 +1646,8 @@ def do_kdf_with_user_kdk(DkMsgStr, p_key, blockSize):
         start = i * p_key.block_size
         end = start + p_key.len
 
-        p_key.src_buf[start:end] = do_aes_gcm(p_key.src_buf[start:end], p_key.len, p_key, iv, aad, tag, verify_bytes, True)
-        buff = bytearray(hashlib.sha512(p_key.src_buf[start:end]).digest())
+        kdf_list[KdfArg.SRC][start:end] = do_aes_gcm(kdf_list[KdfArg.SRC][start:end], p_key.len, p_key, iv, aad, tag, verify_bytes, True)
+        buff = bytearray(hashlib.sha512(kdf_list[KdfArg.SRC][start:end]).digest())
 
         # Start writing to the 2nd blob b/c first blob has the blk_cnt
         start = (i+1) * blob_sz
@@ -1979,7 +1980,11 @@ def do_derive_hmacsha(p_key):
     else:
         key = do_kdf_kdf2(hex_to_str(p_key.key.aeskey), None, p_key.kdf.label.get_strbuf(), p_key.kdf.context.get_strbuf(), True)
         backup = p_key
-        backup.key.aeskey = key
+        if not p_key.kdf.key_already_derived:
+            backup.key.aeskey = key
+        # Uncomment to generate prederived key
+        # with open("hmac_derived_key", "wb") as f:
+        #     f.write(key)
         buff_hash = do_hmac_sha256(p_key.get_sign_buf(), p_key.len, backup)
 
     # save hash to *.hash file
@@ -1994,7 +1999,11 @@ def do_derive_aesgcm(p_key, internal):
     else:
         key = do_kdf_kdf2(hex_to_str(p_key.key.aeskey), None, p_key.kdf.label.get_strbuf(), p_key.kdf.context.get_strbuf(), True)
         backup = p_key
-        backup.key.aeskey = key
+        if not p_key.kdf.key_already_derived:
+            backup.key.aeskey = key
+        # Uncomment to generate prederived key
+        # with open("aes_derived_key", "wb") as f:
+        #     f.write(key)
         buff_enc = do_aes_gcm(p_key.get_sign_buf(), p_key.len, backup, internal["--iv"], internal["--aad"], internal["--tag"],
             internal["--verify"], internal["--verbose"])
 

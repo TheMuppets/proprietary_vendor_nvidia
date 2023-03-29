@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014-2022, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2014-2023, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -91,9 +91,9 @@ class TFlashT23x_Base(object):
         'tegrasign': 'tegrasign_v3.py',
     }
     tegraflash_gpt_image_name_map = {
-        'nvme_0_master_boot_record': 'mbr_9_0.bin',
-        'nvme_0_primary_gpt': 'gpt_primary_9_0.bin',
-        'nvme_0_secondary_gpt': 'gpt_secondary_9_0.bin',
+        'nvme_0_master_boot_record': 'mbr_12_0.bin',
+        'nvme_0_primary_gpt': 'gpt_primary_12_0.bin',
+        'nvme_0_secondary_gpt': 'gpt_secondary_12_0.bin',
         'sdcard_0_master_boot_record': 'mbr_6_0.bin',
         'sdcard_0_primary_gpt': 'gpt_primary_6_0.bin',
         'sdcard_0_secondary_gpt': 'gpt_secondary_6_0.bin',
@@ -109,6 +109,9 @@ class TFlashT23x_Base(object):
         'ufs_user_0_master_boot_record': 'mbr_8_0.bin',
         'ufs_user_0_primary_gpt': 'gpt_primary_8_0.bin',
         'ufs_user_0_secondary_gpt': 'gpt_secondary_8_0.bin',
+        'external_0_master_boot_record': 'mbr_9_0.bin',
+        'external_0_primary_gpt': 'gpt_primary_9_0.bin',
+        'external_0_secondary_gpt': 'gpt_secondary_9_0.bin',
     }
 
     def __init__(self):
@@ -463,7 +466,9 @@ class TFlashT23x_Base(object):
         if values['--odmdata']:
             self.tegraflash_update_bpmp_dtb()
             self.tegraflash_update_cpubl_dtb()
-        tegraflash_concat_overlay_dtb()
+        if values['--bldtb'] is not None and not '_overlay' in values['--bldtb']:
+            values['--bldtb'] = tegraflash_create_backup_file(values['--bldtb'], '_overlay')
+            tegraflash_concat_overlay_dtb()
 
         if values['--concat_cpubl_bldtb'] is True:
             self.concatenate_cpubl_bldtb()
@@ -2210,11 +2215,22 @@ class TFlashT23x_Base(object):
         dce_list = ['A_dce-fw', 'B_dce-fw']
 
         if partition_name in cpu_bl_list:
-            # Check if --concat_cpubl_bldtb is specified, then apply --overlay_dtb
+            # Check if filename has '_with_dtb'? If so, it has been concatenated with dtb.
+            if '_with_dtb' in filename:
+                return filename
+            # If no '_with_dtb', concatenate with dtb file specified in values['--bldtb'].
             if values['--concat_cpubl_bldtb'] is True:
                 bl_dtb_file = values['--bldtb']
+                # Check if bl_dtb_file has '_overlay'? If so, it has been concatenated with dtbo files.
+                if values['--overlay_dtb'] and not '_overlay' in bl_dtb_file:
+                    info_print(bl_dtb_file + ' has no overlay_dtb files.')
+                    info_print('Concatenating dtbo files to ' + bl_dtb_file)
+                    # Concatenate overlay_dtb files to bl_dtb_file
+                    values['--bldtb'] = tegraflash_create_backup_file(values['--bldtb'], '_overlay')
+                    tegraflash_concat_overlay_dtb()
+                    bl_dtb_file = values['--bldtb']
                 cpubl_bin_file = filename
-                cpubl_with_dtb = cpubl_bin_file.split('.', 1)[0] + '_with_dtb.bin'
+                cpubl_with_dtb = os.path.splitext(cpubl_bin_file)[0] + '_with_dtb.bin'
                 info_print('Concatenating bl dtb:(' + bl_dtb_file + '), to cpubl binary: ' + cpubl_bin_file)
                 if not os.path.exists(bl_dtb_file):
                     raise tegraflash_exception('Could not find ' + bl_dtb_file)
@@ -2223,9 +2239,6 @@ class TFlashT23x_Base(object):
                 shutil.copyfile(cpubl_bin_file, cpubl_with_dtb)
                 concat_file(cpubl_with_dtb, bl_dtb_file)  # order: outfile, infile
                 filename = cpubl_with_dtb
-            if values['--overlay_dtb']:
-                dtb_files = list(filter(None, values['--overlay_dtb'].split(',')))
-                concat_file_4k(filename, dtb_files)
 
         elif partition_name in dce_list:
             dce_bin = filename
@@ -2605,6 +2618,9 @@ class TFlashT23x_Base(object):
                         run_command(command)
                         mb2comb_file = self.concatenate_mb2bct_mb2(tags[1], mb2_bct_file)
                         tags[1] = mb2comb_file
+                    if tags[0] == 'bpmp_fw_dtb' and self.bpmpdtbodm:
+                        info_print('Using bpmp-dtb concatenated with odmdata')
+                        tags[1] = self.bpmpdtbodm
 
                     magic_id = self.tegraflash_get_magicid(tags[0])
                     if values['--encrypt_key'] is None:
@@ -2631,7 +2647,7 @@ class TFlashT23x_Base(object):
         if self.tegrabct_values['--mb1_cold_boot_bct'] is not None:
             shutil.copyfile(self.tegrabct_values['--mb1_cold_boot_bct'], output_dir + "/" + self.tegrabct_values['--mb1_cold_boot_bct'])
 
-        file_list = [values['--rawkerneldtb'], values['--kerneldtb'], values['--mb2_bct'], values['--mb2_cold_boot_bct'], self.tegrabct_values['--membct_rcm'], self.tegrabct_values['--membct_cold_boot']]
+        file_list = [values['--mb2_bct'], values['--mb2_cold_boot_bct'], self.tegrabct_values['--membct_rcm'], self.tegrabct_values['--membct_cold_boot']]
         for _file in file_list:
             if _file is not None and os.path.isfile(_file):
                 shutil.copyfile(_file, output_dir + "/" + _file)
@@ -3000,13 +3016,14 @@ class TFlashT23x_Base(object):
         info_print('Concatenating bl dtb to cpubl binary')
         bl_dtb_file = values['--bldtb']
         cpubl_bin_file = values['--cpubl']
-        cpubl_with_dtb = cpubl_bin_file.split('.', 1)[0] + '_with_dtb.bin'
+        cpubl_with_dtb = os.path.splitext(cpubl_bin_file)[0] + '_with_dtb.bin'
         if not os.path.exists(bl_dtb_file):
             raise tegraflash_exception('Could not find ' + bl_dtb_file)
         if not os.path.exists(cpubl_bin_file):
             raise tegraflash_exception('Could not find ' + cpubl_bin_file)
         shutil.copyfile(cpubl_bin_file, cpubl_with_dtb)
         concat_file(cpubl_with_dtb, bl_dtb_file)  # order: outfile, infile
+        values['--cpubl'] = cpubl_with_dtb
 
     def get_dcebin_filename(self):
         dce_bin_file = None
@@ -3247,6 +3264,8 @@ class TFlashT23x_Base(object):
         command.extend(["-nostdinc"])
         command.extend(["-x", "assembler-with-cpp"])
         command.extend(["-D", "IN_DTS_CONTEXT"])
+        command.extend(["-I", os.path.relpath(tegraflash_abs_path(""))])
+        command.extend(["-I", os.path.relpath(tegraflash_abs_path("t186ref/BCT"))])
         command.extend([input_file])
         command.extend([out_file])
         run_command(command, False)

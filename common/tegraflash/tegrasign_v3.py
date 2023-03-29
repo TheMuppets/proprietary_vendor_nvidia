@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2018-2022, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2023, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -71,7 +71,7 @@ def parse_cmdline(commandLine):
     parser.add_argument("--getmontgomeryvalues", help="Save montgomery values to file", metavar='FILE')
     parser.add_argument("--hsm",    help="Invoke HSM-mode call with key type specified: [ |sbk|kek0|fskp_ak|fskp_ek|fskp_kdk|fskp|rsa|eddsa|algo]", nargs='*', metavar='HSM')
     parser.add_argument("--iv",     help="Specify iv for cipher aescbc, aesgcm by using 'random', file containing IV, or hex string without '0x'.", metavar='IV', default=None)
-    parser.add_argument("--kdf",    help="Perform KDF and encryption. <label=label.bin> <context=context.bin> <kdf_file=kdf.yaml>",  nargs='+', metavar='KDF')
+    parser.add_argument("--kdf",    help="Perform KDF and encryption. <label=label.bin> <context=context.bin> <kdf_file=kdf.yaml> <key_already_derived=boolean>",  nargs='+', metavar='KDF')
     parser.add_argument("--key",    help="Specify a file containing key", metavar='FILE')
     parser.add_argument("--length", help="Specify the length of the data to be signed or omit to specify the entire data", default=0)
     parser.add_argument("--list",   help="Specify a XML file that contains a list of files to be signed", metavar='FILE',)
@@ -544,7 +544,7 @@ def tegrasign(args_file, args_getmode, args_getmont, args_key, args_length, args
                             f.write(org_src)
                             return True
 
-                    elif (kdf_arg_len == 2):
+                    elif (kdf_arg_len >= 2):
                         if internal["--enc"] == 'aesgcm':
                             return do_derive_aesgcm(p_keylist[0], internal)
                         elif internal["--sign"] == 'hmacsha256':

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014-2022, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2014-2023, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -74,9 +74,9 @@ tegraflash_eeprom_name_map = {
 }
 
 tegraflash_gpt_image_name_map = {
-    'nvme_0_master_boot_record': 'mbr_9_0.bin',
-    'nvme_0_primary_gpt': 'gpt_primary_9_0.bin',
-    'nvme_0_secondary_gpt': 'gpt_secondary_9_0.bin',
+    'nvme_0_master_boot_record': 'mbr_12_0.bin',
+    'nvme_0_primary_gpt': 'gpt_primary_12_0.bin',
+    'nvme_0_secondary_gpt': 'gpt_secondary_12_0.bin',
     'sdcard_0_master_boot_record': 'mbr_6_0.bin',
     'sdcard_0_primary_gpt': 'gpt_primary_6_0.bin',
     'sdcard_0_secondary_gpt': 'gpt_secondary_6_0.bin',
@@ -87,6 +87,9 @@ tegraflash_gpt_image_name_map = {
     'sdmmc_user_3_secondary_gpt': 'gpt_secondary_1_3.bin',
     'spi_0_secondary_gpt': 'gpt_secondary_3_0.bin',
     'spi_0_secondary_gpt_backup': 'gpt_secondary_3_0.bin',
+    'external_0_master_boot_record': 'mbr_9_0.bin',
+    'external_0_primary_gpt': 'gpt_primary_9_0.bin',
+    'external_0_secondary_gpt': 'gpt_secondary_9_0.bin',
 }
 
 # Currently it supports up to four boot chains, so at most four
@@ -2851,6 +2854,28 @@ def tegraflash_generate_recovery_blob(exports, recovery_args):
     tegraflash_generate_blob(True, tegraflash_os_path(output_dir + "/" + blob_filename))
     info_print(blob_filename + ' saved in ' + output_dir)
 
+def tegraflash_disable_rce_to_dtb (dtb_file):
+    try:
+        with open(dtb_file, 'rb') as infile:
+            dtb = pyfdt.FdtBlobParse(infile)
+
+        fdt = dtb.to_fdt()
+
+        rce_node = fdt.resolve_path("/rtcpu@bc00000")
+        if not rce_node:
+            return
+
+        if rce_node._find('status'):
+            info_print('Disable RCE in rcm kernel-dtb.')
+            rce_node.remove('status')
+            rce_node.insert(0, pyfdt.FdtPropertyStrings('status', ['disabled']))
+
+        with open(dtb_file,'wb') as outfile:
+            outfile.write(fdt.to_dtb())
+
+    except Exception as e:
+        raise tegraflash_exception("Unexpected error in updating: " + dtb_file + ' ' + str(e))
+
 def tegraflash_generate_blob(sign_images, blob_filename):
     bins=''
     info_print('Generating blob')
@@ -2898,6 +2923,9 @@ def tegraflash_generate_blob(sign_images, blob_filename):
         filename = os.path.basename(tags[1])
         if not os.path.exists(filename):
             tegraflash_symlink(tegraflash_abs_path(tags[1]), filename)
+
+        if tags[0] == 'kernel_dtb' and int(values['--chip'], 0) == 0x19:
+            tegraflash_disable_rce_to_dtb(filename)
 
         if not os.path.exists('blob_' + filename):
             tegraflash_symlink(filename, 'blob_' + filename)
@@ -4488,6 +4516,13 @@ def tegraflash_concat_overlay_dtb():
     cpubl_dtb = values['--bldtb']
     if cpubl_dtb != None and os.path.exists(cpubl_dtb):
         concat_file_4k(cpubl_dtb, dtb_files)
+    # Null terminate the list of DTBs.
+    with open(cpubl_dtb, 'ab+') as outfile:
+        # Pad to the next 4K boundary
+        cur = outfile.tell()
+        outfile.write(bytearray((((cur-1) & ~0xFFF) + 0x1000) - cur))
+        # Append enough zeros to cover a DTB header.
+        outfile.write(bytearray(64))
 
 # Update T194 BPMP DTB based on odmdata input
 # bpmp_uphy_config dict format: {"property", [delete/add, is_string, value]}
@@ -4711,12 +4746,14 @@ def tegraflash_parse_partitionlayout():
                 # Add odmdata strings to cpubl dtb
                 cpubl_dtb = tegraflash_create_backup_file(values['--bldtb'], '_with_odm')
                 tegraflash_add_odm_data_to_dtb(odmdata_str, cpubl_dtb)
-            cpubl_dtb = tegraflash_create_backup_file(cpubl_dtb, '_overlay')
-            values['--bldtb'] = cpubl_dtb
-            tegraflash_concat_overlay_dtb()
-            # Copy the modified cpubl_dtb file to the original cpubl_dtb file
-            shutil.copyfile(cpubl_dtb, orig_cpubl_dtb)
-            values['--bldtb'] = orig_cpubl_dtb
+            if values['--overlay_dtb'] is not None:
+                cpubl_dtb = tegraflash_create_backup_file(cpubl_dtb, '_overlay')
+                values['--bldtb'] = cpubl_dtb
+                tegraflash_concat_overlay_dtb()
+            if values['--bldtb'] != orig_cpubl_dtb:
+                # Copy the modified cpubl_dtb file to the original cpubl_dtb file
+                shutil.copyfile(values['--bldtb'], orig_cpubl_dtb)
+                values['--bldtb'] = orig_cpubl_dtb
     info_print('Parsing partition layout')
     command = exec_file('tegraparser')
     command.extend(['--pt', values['--cfg']])

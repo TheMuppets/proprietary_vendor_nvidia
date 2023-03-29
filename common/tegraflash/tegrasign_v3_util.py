@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 #
-# Copyright (c) 2018-2022, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2018-2023, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -227,6 +227,8 @@ class KDF:
         self.der_root = None
         self.enc = None
         self.bootmode = None
+        self.key_already_derived = False
+
 
     def parse_file(self, p_key, kdf_file, internal = None):
         try:
@@ -304,6 +306,8 @@ class KDF:
             elif 'kdf_file=' in arg_low:
                 kdf_file = arg.split('=')[1]
                 self.parse_file(p_key, kdf_file, internal)
+            elif "key_already_derived=true" == arg_low:
+                self.key_already_derived = True
             else:
                 raise tegrasign_exception('Unknown argument parsed ' + arg)
         p_key.src_file = internal['--file']
