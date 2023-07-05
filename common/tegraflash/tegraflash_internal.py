@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014-2021, NVIDIA Corporation.  All Rights Reserved.
+# Copyright (c) 2014-2022, NVIDIA Corporation.  All Rights Reserved.
 #
 # NVIDIA Corporation and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -2806,6 +2806,8 @@ def tegraflash_reboot(args):
         info_print('Coldbooting the device')
     elif args[0] == 'recovery':
         info_print('Rebooting to recovery mode')
+    elif args[0] == 'poweroff':
+        info_print('poweroff the device')
     else:
         raise tegraflash_exception(args[0] + " is not supported")
 
