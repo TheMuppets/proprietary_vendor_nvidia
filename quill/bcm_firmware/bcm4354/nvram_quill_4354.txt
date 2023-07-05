@@ -159,3 +159,8 @@ muxenab=0x11
 ltecxmux=0x534201
 btc_params122=0
 btc_params123=0
+
+disable_olpc=0
+olpc_thresh=0
+olpc_anchor2g=0
+olpc_anchor5g=0
