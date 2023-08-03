@@ -228,7 +228,8 @@ class KDF:
         self.enc = None
         self.bootmode = None
         self.key_already_derived = False
-
+        self.compress = None
+        self.meta_blob_sz = 0
 
     def parse_file(self, p_key, kdf_file, internal = None):
         try:
@@ -240,7 +241,8 @@ class KDF:
         tokens = {'IV':'--iv', 'AAD':'--aad', 'VER':None, 'DERSTR':None, 'CHIPID':None,
                   'MAGICID':None, 'FLAG':None, 'BL_DERSTR':None, 'FW_DERSTR':None,
                   'TZ_DERSTR':None, 'GP_DERSTR':None, 'DERKEY':None, 'DERROOT': None, 'PAYLOAD_OFF':None,
-                  'PAYLOAD_SZ':None, 'DIGEST_OFF':None, 'TAG_OFF':None, 'ENC':None, 'BOOTMODE':None }
+                  'PAYLOAD_SZ':None, 'DIGEST_OFF':None, 'TAG_OFF':None, 'ENC':None, 'BOOTMODE':None,
+                  'COMPRESS':None, 'METABLOBSIZE':None }
         for token in tokens:
             if token in params:
                 # Update the entries if they are found in internal dict
@@ -293,6 +295,10 @@ class KDF:
                     self.enc = params.get(token)
                 elif token == 'BOOTMODE':
                     self.bootmode = params.get(token)
+                elif token == 'COMPRESS':
+                    self.compress = params.get(token)
+                elif token == 'METABLOBSIZE':
+                    self.meta_blob_sz = params.get(token)
 
     def parse(self, p_key, internal):
         kdf_arg = internal['--kdf']

@@ -1115,7 +1115,6 @@ def do_kdf_params_t234(dk, params, kdf_list):
     is_hex = True
     is_str = False
     L = 256
-    basic_params = params['BASIC']
 
     # Derive the key relationship: dk -> kdk -> *_dec_kdk
     dk_params = params['DK'][dk]
@@ -1166,21 +1165,12 @@ def do_kdf_params_t234(dk, params, kdf_list):
         bl_dec_kdk_ctx['Msg'] = None
         fw_dec_kdk_ctx['Msg'] = None
 
-    dec_kdk_params = params['DEC_KDK'][kdk_to_use]
-
-    dec_kdk_ctx = {
-        'KDK'   : basic_params[dec_kdk_params['KDK']],
-        'KDD'   : basic_params[dec_kdk_params['KDD']],
-        'Label' : dec_kdk_params['Label'],
-    }
-
-    dec_kdk_ctx["Msg"] = get_composed_msg(dec_kdk_ctx['Label'], '', L, is_str)
 
     # Pop the elements that are no longer needed
     while (len(kdf_list) > KdfArg.FLAG):
         kdf_list.pop()
 
-    return ([dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], dec_kdk_ctx["Msg"],
+    return ([None, None,
             bl_dec_kdk_ctx["Msg"], kdk_ctx["Msg"], dk_ctx["Msg"]])
 
 def do_kdf(params_slist, kdf_list):
@@ -1260,7 +1250,6 @@ def do_kdf_params_oem_t234(dk, params, kdf_list, p_key):
     is_hex = True
     is_str = False
     L = 256
-    basic_params = params['BASIC']
 
     dk_params = params['DK'][dk]
     dk_ctx = {
@@ -1355,19 +1344,7 @@ def do_kdf_params_oem_t234(dk, params, kdf_list, p_key):
         count = count - 1
 
     aes_params = params['AES'][kdk_to_use]
-    aes_iv = manifest_xor_offset(basic_params[aes_params['IV']], aes_params["Offset"])
-    aes_aad = aes_params['Manifest'] + AAD_0_96
     aes_tag = bytes(16)
-
-    dec_kdk_params = params['DEC_KDK'][aes_params['KDK']]
-
-    dec_kdk_ctx = {
-        'KDK'   : basic_params[dec_kdk_params['KDK']],
-        'KDD'   : basic_params[dec_kdk_params['KDD']],
-        "Label" : dec_kdk_params["Label"],
-    }
-
-    dec_kdk_ctx["Msg"] = get_composed_msg(dec_kdk_ctx['Label'], '', L, is_str)
 
     # Pop the elements that are no longer needed
     while (len(kdf_list) > KdfArg.DKSTR):
@@ -1381,7 +1358,7 @@ def do_kdf_params_oem_t234(dk, params, kdf_list, p_key):
             if extract_AES_key(key_buf, p_key):
                 sbk_keystr = hex_to_str(p_key.key.aeskey)
 
-    return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, sbk_keystr, dec_kdk_ctx['Msg'],
+    return [None, None, None, sbk_keystr, None,
             bl_kdk_ctx['Msg'], tz_kdk_ctx['Msg'], gp_kdk_ctx['Msg'], gpto_kdk_ctx['Msg'],  kdk_ctx['Msg'], dk_ctx['Msg']]
 
 def do_kdf_params_oem(dk, params, kdf_list, p_key):
@@ -1389,7 +1366,6 @@ def do_kdf_params_oem(dk, params, kdf_list, p_key):
     is_hex = True
     is_str = False
     L = 256
-    basic_params = params['BASIC']
 
     dk_params = params['DK'][dk]
     dk_ctx = {
@@ -1488,19 +1464,7 @@ def do_kdf_params_oem(dk, params, kdf_list, p_key):
         count = count - 1
 
     aes_params = params['AES'][kdk_to_use]
-    aes_iv = manifest_xor_offset(basic_params[aes_params['IV']], aes_params["Offset"])
-    aes_aad = aes_params['Manifest'] + AAD_0_96
     aes_tag = bytes(16)
-
-    dec_kdk_params = params['DEC_KDK'][aes_params['KDK']]
-
-    dec_kdk_ctx = {
-        'KDK'   : basic_params[dec_kdk_params['KDK']],
-        'KDD'   : basic_params[dec_kdk_params['KDD']],
-        "Label" : dec_kdk_params["Label"],
-    }
-
-    dec_kdk_ctx["Msg"] = get_composed_msg(dec_kdk_ctx['Label'], '', L, is_str)
 
     # Pop the elements that are no longer needed
     while (len(kdf_list) > KdfArg.DKSTR):
@@ -1514,7 +1478,7 @@ def do_kdf_params_oem(dk, params, kdf_list, p_key):
             if extract_AES_key(key_buf, p_key):
                 sbk_keystr = hex_to_str(p_key.key.aeskey)
 
-    return [dec_kdk_ctx['KDK'] + dec_kdk_ctx['KDD'], aes_iv,  aes_aad, sbk_keystr, dec_kdk_ctx['Msg'],
+    return [None, None, None, sbk_keystr, None,
             bl_kdk_ctx['Msg'], tz_kdk_ctx['Msg'], gp_kdk_ctx['Msg'], gpto_kdk_ctx['Msg'],  kdk_ctx['Msg'], dk_ctx['Msg']]
 
 # calls for offset, then enc, then do sha and returns
@@ -1555,6 +1519,8 @@ def do_kdf_oem_enc(kdf_list, p_key, blockSize):
 
             pay_off = int.from_bytes(p_key.kdf.pay_off.get_hexbuf(),  "little")
             pay_sz = int.from_bytes(p_key.kdf.pay_sz.get_hexbuf(),  "little")
+            if p_key.kdf.compress == 'TRUE':
+                pay_sz = pay_sz + int(p_key.kdf.meta_blob_sz)
             kdf_list = [p_key.kdf.iv.get_hexbuf(), p_key.kdf.aad.get_hexbuf(), p_key.kdf.tag.get_hexbuf(), \
                     src[pay_off:pay_off+pay_sz], p_key.kdf.flag, p_key.kdf.label.get_hexbuf(), p_key.kdf.context.get_hexbuf(), \
                     p_key.kdf.bl_label.get_hexbuf(), p_key.kdf.fw_label.get_hexbuf()]
@@ -1564,16 +1530,24 @@ def do_kdf_oem_enc(kdf_list, p_key, blockSize):
             else:
                 params_slist = do_kdf_params_oem(dk, params, kdf_list, p_key)
 
+            # Binary is compressed with 256KB block size
+            if p_key.kdf.compress == 'TRUE':
+                blockSize='262144'
+                info_print('encrypt compress image with block size '+blockSize)
+
             # if user kdk is enabled, only params_slist[10] (DkMsg) is required.
             if p_key.kdf.enc == 'USER_KDK':
                 do_kdf_with_user_kdk(params_slist[10], kdf_list, p_key, blockSize)
             else:
-                if (do_kdf_oem(params_slist, kdf_list, blockSize) == False):
+                if (do_kdf_oem(params_slist, kdf_list, blockSize, p_key.kdf.compress) == False):
                     return False
             tag_off = int.from_bytes(p_key.kdf.tag_off.get_hexbuf(),  "little")
             # pad the tag and encrypted buffer
             src[pay_off:pay_off+pay_sz] = kdf_list[KdfArg.SRC][:]
-            src[tag_off:tag_off+len(kdf_list[KdfArg.TAG])] = kdf_list[KdfArg.TAG]
+            if p_key.kdf.compress == 'TRUE':
+                src[pay_off:pay_off+len(kdf_list[KdfArg.TAG])] = kdf_list[KdfArg.TAG]
+            else:
+                src[tag_off:tag_off+len(kdf_list[KdfArg.TAG])] = kdf_list[KdfArg.TAG]
             if md:
                 enc_file = temp_stem + str(md.group(1)) + '_encrypt'
             else:
@@ -1581,6 +1555,11 @@ def do_kdf_oem_enc(kdf_list, p_key, blockSize):
             with open(enc_file, 'wb') as enc_f:
                 enc_f.write(src)
 
+            if p_key.kdf.compress == 'TRUE':
+                pay_sz = len(kdf_list[KdfArg.TAG])
+                if pay_sz != int(p_key.kdf.meta_blob_sz):
+                    info_print('Size of meta blob is not aligned after compression and after encryption')
+                    return False
             enc_file_sha = compute_sha('sha512', enc_file, pay_off, pay_sz)
 
             with open(enc_file_sha, 'rb') as enc_f:
@@ -1665,7 +1644,7 @@ def do_kdf_with_user_kdk(DkMsgStr, kdf_list, p_key, blockSize):
     # Save blob to the tag field
     p_key.kdf.tag.set_buf(blob_buf)
 
-def do_kdf_oem(params_slist, kdf_list, blockSize):
+def do_kdf_oem(params_slist, kdf_list, blockSize, isCompress):
     if is_hsm():
         from tegrasign_v3_hsm import do_kdf_oem_hsm
         p_key = SignKey()
@@ -1727,6 +1706,9 @@ def do_kdf_oem(params_slist, kdf_list, blockSize):
     if blockSize  != "0":
         command.extend(['--block', str(blockSize)])
 
+    if isCompress == 'TRUE':
+        command.extend(['--iscompressed'])
+
     ret_str = run_command(command)
 
     if check_file(result_name):
@@ -1758,7 +1740,7 @@ def do_derive_dk_oem(dk, params, kdf_list, p_key, blockSize):
             from tegrasign_v3_nvkey_load import do_kdf_params_oem
             params_slist = do_kdf_params_oem(dk, params, kdf_list, p_key)
 
-        return do_kdf_oem(params_slist, kdf_list, blockSize)
+        return do_kdf_oem(params_slist, kdf_list, blockSize, p_key.kdf.compress)
     raise tegrasign_exception('Can not derive %s' % (dk))
 
 def map_bin_to_dk_oem(p_key, params):
